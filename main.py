@@ -476,8 +476,7 @@ def render_text(game: GameState) -> str:
     lines: List[str] = ["<b>RF Online: Text Raid</b>"]
 
     if not game.player:
-        lines.append("
-Выбери расу и класс, затем начни кампанию.")
+        lines.append("Выбери расу и класс, затем начни кампанию.")
     else:
         p = game.player
         weapon = current_weapon(p)
