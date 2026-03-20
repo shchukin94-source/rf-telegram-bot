@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
+TOKEN = os.getenv("BOT_TOKEN", "567843242:AAGOm95EvSFD8Dar0MpzPvYSK4iXz9NJJi8")
 SAVE_FILE = Path("games.json")
 MAX_LEVEL = 50
 DROP_GEAR_CHANCE = 7
@@ -251,7 +251,7 @@ class GameState:
     win: bool = False
     log: List[str] = field(default_factory=lambda: [
         "Добро пожаловать в RF Online: Text Raid.",
-        "Бот сохраняет прогресс и теперь поддерживает оружие, броню, талики и боссов.",
+        "Бот сохраняет прогресс и поддерживает оружие, броню, талики и боссов.",
     ])
 
 
@@ -385,19 +385,15 @@ def make_gear(slot: str, level: int, is_boss: bool) -> Gear:
     tier = roll_weighted_tier(is_boss)
     names = WEAPON_NAMES if slot == "weapon" else ARMOR_NAMES
     base = max(1, level)
-    if slot == "weapon":
-        stat = max(1, int((2 + base // 2) * tier["weapon_mult"]))
-    else:
-        stat = max(1, int((1 + base // 3) * tier["armor_mult"]))
+    stat = max(1, int((2 + base // 2) * tier["weapon_mult"])) if slot == "weapon" else max(1, int((1 + base // 3) * tier["armor_mult"]))
     return Gear(
-        id=f"{slot}_{tier['id']}_{level}_{random.randint(1000,9999)}",
+        id=f"{slot}_{tier['id']}_{level}_{random.randint(1000, 9999)}",
         name=f"{random.choice(names)} [{tier['name']}] lv.{level}",
         slot=slot,
         level=level,
         tier_id=tier["id"],
         tier_name=tier["name"],
         base_stat=stat,
-        upgrade=0,
     )
 
 
@@ -405,8 +401,7 @@ def maybe_gear_drop(enemy_level: int, is_boss: bool) -> Optional[Gear]:
     chance = 100 if is_boss else DROP_GEAR_CHANCE
     if random.randint(1, 100) > chance:
         return None
-    slot = random.choice(["weapon", "armor"])
-    return make_gear(slot, enemy_level, is_boss)
+    return make_gear(random.choice(["weapon", "armor"]), enemy_level, is_boss)
 
 
 def generate_enemy(zone: dict, battle_count: int) -> dict:
@@ -447,15 +442,15 @@ def generate_enemy(zone: dict, battle_count: int) -> dict:
 
 def level_up(player: Player, game: GameState) -> None:
     while player.level < MAX_LEVEL and player.exp >= exp_needed_for_next(player.level):
-        needed = exp_needed_for_next(player.level)
-        player.exp -= needed
+        player.exp -= exp_needed_for_next(player.level)
         player.level += 1
         player.max_hp += 10
         player.hp = player.max_hp
         player.attack += 2
         player.armor += 1
         player.crit += 1
-        add_log(game, f"Новый уровень: {player.level}. Нужно {exp_needed_for_next(player.level) if player.level < MAX_LEVEL else 'MAX'} опыта до следующего.")
+        next_req = exp_needed_for_next(player.level) if player.level < MAX_LEVEL else "MAX"
+        add_log(game, f"Новый уровень: {player.level}. Нужно {next_req} опыта до следующего.")
 
 
 def update_mission(game: GameState, clears: int, loot: int, dizens: int) -> None:
@@ -481,71 +476,56 @@ def render_text(game: GameState) -> str:
         p = game.player
         weapon = current_weapon(p)
         armor = current_armor(p)
-
-        lines.append(f"""
-<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}
-HP: {p.hp}/{p.max_hp}
-Базовая атака: {p.attack} | Общая атака: {total_attack(p)}
-Базовая броня: {p.armor} | Общая броня: {total_armor(p)}
-Крит: {p.crit}%
-Дизены: {p.dizens} | Банки: {p.banks}
-Талики невежества: {p.talics_ignorance} | Талики покровительства: {p.talics_protection}
-Оружие: {esc(weapon.name + ' +' + str(weapon.upgrade) if weapon else 'нет')}
-Броня: {esc(armor.name + ' +' + str(armor.upgrade) if armor else 'нет')}
-Вылазки: {p.clears} | Лут: {p.loot_count}
-Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}
-""")
+        lines.append(
+            f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
+            f"HP: {p.hp}/{p.max_hp}\n"
+            f"Базовая атака: {p.attack} | Общая атака: {total_attack(p)}\n"
+            f"Базовая броня: {p.armor} | Общая броня: {total_armor(p)}\n"
+            f"Крит: {p.crit}%\n"
+            f"Дизены: {p.dizens} | Банки: {p.banks}\n"
+            f"Талики невежества: {p.talics_ignorance} | Талики покровительства: {p.talics_protection}\n"
+            f"Оружие: {esc(weapon.name + ' +' + str(weapon.upgrade) if weapon else 'нет')}\n"
+            f"Броня: {esc(armor.name + ' +' + str(armor.upgrade) if armor else 'нет')}\n"
+            f"Вылазки: {p.clears} | Лут: {p.loot_count}\n"
+            f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}"
+        )
 
     if game.mission:
         status = "получена" if game.mission_claimed else "выполнено" if game.mission_progress >= game.mission["target"] else "в процессе"
-        lines.append(f"""
-<b>Задание:</b> {esc(game.mission['name'])}
-Прогресс: {min(game.mission_progress, game.mission['target'])}/{game.mission['target']}
-Награда: {game.mission['reward']} дизен | Статус: {status}
-""")
+        lines.append(
+            f"<b>Задание:</b> {esc(game.mission['name'])}\n"
+            f"Прогресс: {min(game.mission_progress, game.mission['target'])}/{game.mission['target']}\n"
+            f"Награда: {game.mission['reward']} дизен | Статус: {status}"
+        )
 
     zone = get_zone(game.current_zone_id)
     if zone:
-        lines.append(f"""
-<b>Локация:</b> {esc(zone['name'])}
-{esc(zone['text'])}
-""")
+        lines.append(f"<b>Локация:</b> {esc(zone['name'])}\n{esc(zone['text'])}")
 
     if game.enemy:
-        lines.append(f"""
-<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}
-HP: {game.enemy['hp']}/{game.enemy['max_hp']} | EXP: {game.enemy['exp']}
-Типичный дроп: {esc(', '.join(game.enemy['drops']))}
-Тип: {'босс' if game.enemy['is_boss'] else 'обычный моб'}
-""")
+        lines.append(
+            f"<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}\n"
+            f"HP: {game.enemy['hp']}/{game.enemy['max_hp']} | EXP: {game.enemy['exp']}\n"
+            f"Типичный дроп: {esc(', '.join(game.enemy['drops']))}\n"
+            f"Тип: {'босс' if game.enemy['is_boss'] else 'обычный моб'}"
+        )
 
     if game.player and game.player.weapon_inventory:
-        inv = "
-".join(
-            f"{'✅ ' if game.player.equipped_weapon_index == i else ''}{i+1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
+        inv = "\n".join(
+            f"{'✅ ' if game.player.equipped_weapon_index == i else ''}{i + 1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
             for i, g in enumerate(game.player.weapon_inventory[:8])
         )
-        lines.append("
-<b>Оружие в инвентаре:</b>
-" + esc(inv))
+        lines.append("<b>Оружие в инвентаре:</b>\n" + esc(inv))
 
     if game.player and game.player.armor_inventory:
-        inv = "
-".join(
-            f"{'✅ ' if game.player.equipped_armor_index == i else ''}{i+1}. {g.name} +{g.upgrade} (arm +{g.base_stat})"
+        inv = "\n".join(
+            f"{'✅ ' if game.player.equipped_armor_index == i else ''}{i + 1}. {g.name} +{g.upgrade} (arm +{g.base_stat})"
             for i, g in enumerate(game.player.armor_inventory[:8])
         )
-        lines.append("
-<b>Броня в инвентаре:</b>
-" + esc(inv))
+        lines.append("<b>Броня в инвентаре:</b>\n" + esc(inv))
 
-    lines.append("
-<b>Журнал:</b>
-" + esc("
-".join(game.log[-8:])))
-
-    return "
-".join(lines)
+    lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
+    return "\n\n".join(lines)
 
 
 def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
@@ -583,10 +563,10 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton("Отступить", callback_data="escape")])
         return InlineKeyboardMarkup(rows)
     if game.stage == "equipment":
-        for i, w in enumerate(game.player.weapon_inventory[:6]):
-            rows.append([InlineKeyboardButton(f"Надеть оружие {i+1}", callback_data=f"equip_weapon:{i}")])
-        for i, a in enumerate(game.player.armor_inventory[:6]):
-            rows.append([InlineKeyboardButton(f"Надеть броню {i+1}", callback_data=f"equip_armor:{i}")])
+        for i, _ in enumerate(game.player.weapon_inventory[:6]):
+            rows.append([InlineKeyboardButton(f"Надеть оружие {i + 1}", callback_data=f"equip_weapon:{i}")])
+        for i, _ in enumerate(game.player.armor_inventory[:6]):
+            rows.append([InlineKeyboardButton(f"Надеть броню {i + 1}", callback_data=f"equip_armor:{i}")])
         rows.append([
             InlineKeyboardButton("Точить оружие", callback_data="upgrade_weapon"),
             InlineKeyboardButton("Точить броню", callback_data="upgrade_armor"),
@@ -606,26 +586,22 @@ async def send_or_edit(update: Update, text: str, keyboard: InlineKeyboardMarkup
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    game = get_game(user_id)
+    game = get_game(update.effective_user.id)
     await send_or_edit(update, render_text(game), render_keyboard(game))
 
 
 async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     USER_GAMES[update.effective_user.id] = GameState()
     save_games()
-    await send_or_edit(update, render_text(USER_GAMES[update.effective_user.id]), render_keyboard(USER_GAMES[update.effective_user.id]))
+    game = USER_GAMES[update.effective_user.id]
+    await send_or_edit(update, render_text(game), render_keyboard(game))
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "/start — открыть игру
-"
-        "/reset — сбросить прогресс
-"
-        "/help — помощь
-
-"
+        "/start — открыть игру\n"
+        "/reset — сбросить прогресс\n"
+        "/help — помощь\n\n"
         "Теперь в игре 50 уровней, банки, броня, оружие, боссы, талики невежества и покровительства, а прогресс сохраняется в файле."
     )
     await update.effective_message.reply_text(text)
@@ -685,12 +661,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data.startswith("zone:") and game.player:
         zone_id = data.split(":", 1)[1]
         zone = get_zone(zone_id)
-        game.current_zone_id = zone_id
-        game.stage = "zone"
-        add_log(game, f"Локация: {zone['name']}. {zone['text']}")
+        if zone is not None:
+            game.current_zone_id = zone_id
+            game.stage = "zone"
+            add_log(game, f"Локация: {zone['name']}. {zone['text']}")
 
     elif data == "explore" and game.player and get_zone(game.current_zone_id):
         zone = get_zone(game.current_zone_id)
+        assert zone is not None
         game.enemy = generate_enemy(zone, game.battle_count)
         game.stage = "combat"
         add_log(game, f"Появляется {'босс' if game.enemy['is_boss'] else 'моб'}: {game.enemy['name']} lv.{game.enemy['level']} (HP {game.enemy['hp']}).")
@@ -702,6 +680,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             dmg *= 2
         game.enemy["hp"] -= dmg
         add_log(game, f"Ты наносишь {dmg} урона." + (" Критический удар!" if crit else ""))
+
         if game.enemy["hp"] <= 0:
             dizens_gain = random.randint(game.enemy["reward_min"], game.enemy["reward_max"])
             exp_gain = game.enemy["exp"]
@@ -711,6 +690,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             game.player.loot_count += 1
             game.player.clears += 1
             add_log(game, f"Враг повержен. Награда: {dizens_gain} дизен, {exp_gain} опыта, добыча: {loot}.")
+
             if loot == "талик невежества":
                 game.player.talics_ignorance += 1
             elif loot == "талик покровительства":
@@ -722,6 +702,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if random.randint(1, 100) <= 4:
                     game.player.talics_protection += 1
                     add_log(game, "Доп. редкий дроп: талик покровительства.")
+
             gear = maybe_gear_drop(game.enemy["level"], game.enemy["is_boss"])
             if gear:
                 if gear.slot == "weapon":
@@ -730,6 +711,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 else:
                     game.player.armor_inventory.append(gear)
                     add_log(game, f"Выпала броня: {gear.name} +0.")
+
             level_up(game.player, game)
             update_mission(game, 1, 1, dizens_gain)
             game.enemy = None
@@ -744,7 +726,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 game.ended = True
                 game.win = False
                 game.stage = "end"
-                add_log(game, "Ты пал в бою. Прогресс сохранён, можно начать заново /reset или продолжить после правок кода.")
+                add_log(game, "Ты пал в бою. Прогресс сохранён, можно начать заново /reset.")
 
     elif data == "bank" and game.player:
         if game.player.banks > 0:
@@ -781,14 +763,16 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.weapon_inventory):
             game.player.equipped_weapon_index = idx
-            add_log(game, f"Ты экипировал оружие: {game.player.weapon_inventory[idx].name} +{game.player.weapon_inventory[idx].upgrade}.")
+            chosen = game.player.weapon_inventory[idx]
+            add_log(game, f"Ты экипировал оружие: {chosen.name} +{chosen.upgrade}.")
             game.stage = "equipment"
 
     elif data.startswith("equip_armor:") and game.player:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.armor_inventory):
             game.player.equipped_armor_index = idx
-            add_log(game, f"Ты экипировал броню: {game.player.armor_inventory[idx].name} +{game.player.armor_inventory[idx].upgrade}.")
+            chosen = game.player.armor_inventory[idx]
+            add_log(game, f"Ты экипировал броню: {chosen.name} +{chosen.upgrade}.")
             game.stage = "equipment"
 
     elif data == "upgrade_weapon" and game.player:
@@ -854,7 +838,43 @@ def build_application() -> Application:
     return app
 
 
+def _run_self_checks() -> None:
+    assert exp_needed_for_next(1) == 50
+    assert exp_needed_for_next(2) == 100
+    assert exp_needed_for_next(3) == 200
+
+    empty_game = GameState()
+    empty_text = render_text(empty_game)
+    assert "Выбери расу и класс" in empty_text
+    assert "RF Online: Text Raid" in empty_text
+
+    player = Player(
+        race_name="Беллато",
+        class_name="Штурмовик",
+        level=1,
+        exp=0,
+        max_hp=100,
+        hp=100,
+        attack=10,
+        armor=5,
+        crit=10,
+        dizens=0,
+        banks=1,
+    )
+    player.weapon_inventory.append(Gear("w1", "Test Weapon", "weapon", 1, "normal", "обычный", 3, 2))
+    player.armor_inventory.append(Gear("a1", "Test Armor", "armor", 1, "normal", "обычный", 2, 1))
+    player.equipped_weapon_index = 0
+    player.equipped_armor_index = 0
+    game = GameState(player=player, mission=choose_mission())
+    text = render_text(game)
+    assert "Test Weapon" in text
+    assert "Test Armor" in text
+    assert total_attack(player) > player.attack
+    assert total_armor(player) > player.armor
+
+
 def main() -> None:
+    _run_self_checks()
     load_games()
     if TOKEN == "PUT_YOUR_BOT_TOKEN_HERE":
         raise RuntimeError("Set BOT_TOKEN environment variable or replace PUT_YOUR_BOT_TOKEN_HERE in the file.")
