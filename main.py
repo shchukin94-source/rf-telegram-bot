@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "567843242:AAGOm95EvSFD8Dar0MpzPvYSK4iXz9NJJi8")
+TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
 SAVE_FILE = Path("games.json")
 MAX_LEVEL = 50
 DROP_GEAR_CHANCE = 7
