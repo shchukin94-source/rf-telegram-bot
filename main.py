@@ -17,11 +17,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
+TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
 SAVE_FILE = Path("games.json")
 MAX_LEVEL = 50
 DROP_GEAR_CHANCE = 7
 BOSS_CHANCE = 15
+ITEMS_PER_PAGE = 5
+ARMOR_SLOTS = ["head", "torso", "legs", "arms", "boots"]
+ARMOR_SLOT_NAMES = {
+    "head": "Голова",
+    "torso": "Торс",
+    "legs": "Штаны",
+    "arms": "Руки",
+    "boots": "Тапки",
+}
 
 ZONES = [
     {
@@ -163,14 +172,13 @@ WEAPON_NAMES = [
     "Леон Блейд",
 ]
 
-ARMOR_NAMES = [
-    "Бронекуртка",
-    "Тактический Доспех",
-    "Шахтёрская Броня",
-    "Комплект Колонии",
-    "Флем Панцирь",
-    "Леон Армор",
-]
+ARMOR_NAMES = {
+    "head": ["Шлем Разведчика", "Маска Колонии", "Шахтёрский Шлем", "Флем Хелм", "Леон Хелм"],
+    "torso": ["Бронекуртка", "Тактический Доспех", "Шахтёрская Броня", "Флем Панцирь", "Леон Армор"],
+    "legs": ["Набедренники", "Штаны Колонии", "Шахтёрские Поножи", "Флем Легсы", "Леон Легсы"],
+    "arms": ["Перчатки Бойца", "Наручи Колонии", "Шахтёрские Руки", "Флем Гаунтлеты", "Леон Гловз"],
+    "boots": ["Полевые Тапки", "Сапоги Колонии", "Шахтёрские Ботинки", "Флем Бутсы", "Леон Бутсы"],
+}
 
 MISSION_POOL = [
     {"id": "hunt", "name": "Зачистить 3 вылазки", "target": 3, "reward": 20, "type": "clears"},
@@ -229,10 +237,11 @@ class Player:
     talics_protection: int = 0
     loot_count: int = 0
     clears: int = 0
+    components: int = 0
     weapon_inventory: List[Gear] = field(default_factory=list)
     armor_inventory: List[Gear] = field(default_factory=list)
     equipped_weapon_index: Optional[int] = None
-    equipped_armor_index: Optional[int] = None
+    equipped_armor: Dict[str, Optional[int]] = field(default_factory=lambda: {slot: None for slot in ARMOR_SLOTS})
 
 
 @dataclass
@@ -249,6 +258,8 @@ class GameState:
     mission_claimed: bool = False
     ended: bool = False
     win: bool = False
+    equipment_page_weapon: int = 0
+    equipment_page_armor: Dict[str, int] = field(default_factory=lambda: {slot: 0 for slot in ARMOR_SLOTS})
     log: List[str] = field(default_factory=lambda: [
         "Добро пожаловать в RF Online: Text Raid.",
         "Бот сохраняет прогресс и поддерживает оружие, броню, талики и боссов.",
@@ -278,6 +289,8 @@ def load_games() -> None:
             player = Player(**player_data)
             player.weapon_inventory = [Gear(**x) for x in player_data.get("weapon_inventory", [])]
             player.armor_inventory = [Gear(**x) for x in player_data.get("armor_inventory", [])]
+            if not player.equipped_armor:
+                player.equipped_armor = {slot: None for slot in ARMOR_SLOTS}
         game = GameState(
             stage=game_data.get("stage", "menu"),
             selected_race=game_data.get("selected_race"),
@@ -291,6 +304,8 @@ def load_games() -> None:
             mission_claimed=game_data.get("mission_claimed", False),
             ended=game_data.get("ended", False),
             win=game_data.get("win", False),
+            equipment_page_weapon=game_data.get("equipment_page_weapon", 0),
+            equipment_page_armor=game_data.get("equipment_page_armor", {slot: 0 for slot in ARMOR_SLOTS}),
             log=game_data.get("log", []),
         )
         USER_GAMES[int(uid)] = game
@@ -334,12 +349,15 @@ def current_weapon(player: Player) -> Optional[Gear]:
     return None
 
 
-def current_armor(player: Player) -> Optional[Gear]:
-    if player.equipped_armor_index is None:
+def current_armor_piece(player: Player, slot: str) -> Optional[Gear]:
+    idx = player.equipped_armor.get(slot)
+    if idx is None:
         return None
-    if 0 <= player.equipped_armor_index < len(player.armor_inventory):
-        return player.armor_inventory[player.equipped_armor_index]
-    player.equipped_armor_index = None
+    if 0 <= idx < len(player.armor_inventory):
+        gear = player.armor_inventory[idx]
+        if gear.slot == slot:
+            return gear
+    player.equipped_armor[slot] = None
     return None
 
 
@@ -352,11 +370,14 @@ def calc_weapon_bonus(player: Player) -> int:
 
 
 def calc_armor_bonus(player: Player) -> int:
-    armor = current_armor(player)
-    if not armor:
-        return 0
-    mult = UPGRADE_BONUSES.get(armor.upgrade, 0)
-    return armor.base_stat + int((player.armor + armor.base_stat) * mult)
+    total = 0
+    for slot in ARMOR_SLOTS:
+        armor = current_armor_piece(player, slot)
+        if armor is None:
+            continue
+        mult = UPGRADE_BONUSES.get(armor.upgrade, 0)
+        total += armor.base_stat + int((player.armor + armor.base_stat) * mult)
+    return total
 
 
 def total_attack(player: Player) -> int:
@@ -383,9 +404,12 @@ def roll_weighted_tier(is_boss: bool) -> dict:
 
 def make_gear(slot: str, level: int, is_boss: bool) -> Gear:
     tier = roll_weighted_tier(is_boss)
-    names = WEAPON_NAMES if slot == "weapon" else ARMOR_NAMES
+    names = WEAPON_NAMES if slot == "weapon" else ARMOR_NAMES[slot]
     base = max(1, level)
-    stat = max(1, int((2 + base // 2) * tier["weapon_mult"])) if slot == "weapon" else max(1, int((1 + base // 3) * tier["armor_mult"]))
+    if slot == "weapon":
+        stat = max(1, int((2 + base // 2) * tier["weapon_mult"]))
+    else:
+        stat = max(1, int((1 + base // 3) * tier["armor_mult"]))
     return Gear(
         id=f"{slot}_{tier['id']}_{level}_{random.randint(1000, 9999)}",
         name=f"{random.choice(names)} [{tier['name']}] lv.{level}",
@@ -401,7 +425,8 @@ def maybe_gear_drop(enemy_level: int, is_boss: bool) -> Optional[Gear]:
     chance = 100 if is_boss else DROP_GEAR_CHANCE
     if random.randint(1, 100) > chance:
         return None
-    return make_gear(random.choice(["weapon", "armor"]), enemy_level, is_boss)
+    slot = random.choice(["weapon"] + ARMOR_SLOTS)
+    return make_gear(slot, enemy_level, is_boss)
 
 
 def generate_enemy(zone: dict, battle_count: int) -> dict:
@@ -467,6 +492,11 @@ def update_mission(game: GameState, clears: int, loot: int, dizens: int) -> None
         add_log(game, f"Задание выполнено: {game.mission['name']}. Забери награду на базе.")
 
 
+def paged_items(items: List[Gear], page: int) -> List[Gear]:
+    start = page * ITEMS_PER_PAGE
+    return items[start:start + ITEMS_PER_PAGE]
+
+
 def render_text(game: GameState) -> str:
     lines: List[str] = ["<b>RF Online: Text Raid</b>"]
 
@@ -475,23 +505,33 @@ def render_text(game: GameState) -> str:
     else:
         p = game.player
         weapon = current_weapon(p)
-        armor = current_armor(p)
+        armor_lines: List[str] = []
+        for slot in ARMOR_SLOTS:
+            piece = current_armor_piece(p, slot)
+            piece_name = f"{piece.name} +{piece.upgrade}" if piece else "нет"
+            armor_lines.append(f"{ARMOR_SLOT_NAMES[slot]}: {piece_name}")
         lines.append(
             f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
             f"HP: {p.hp}/{p.max_hp}\n"
             f"Базовая атака: {p.attack} | Общая атака: {total_attack(p)}\n"
             f"Базовая броня: {p.armor} | Общая броня: {total_armor(p)}\n"
             f"Крит: {p.crit}%\n"
-            f"Дизены: {p.dizens} | Банки: {p.banks}\n"
+            f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components}\n"
             f"Талики невежества: {p.talics_ignorance} | Талики покровительства: {p.talics_protection}\n"
-            f"Оружие: {esc(weapon.name + ' +' + str(weapon.upgrade) if weapon else 'нет')}\n"
-            f"Броня: {esc(armor.name + ' +' + str(armor.upgrade) if armor else 'нет')}\n"
+            f"Оружие: {esc(f'{weapon.name} +{weapon.upgrade}' if weapon else 'нет')}\n"
+            f"{esc(chr(10).join(armor_lines))}\n"
             f"Вылазки: {p.clears} | Лут: {p.loot_count}\n"
             f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}"
         )
 
     if game.mission:
-        status = "получена" if game.mission_claimed else "выполнено" if game.mission_progress >= game.mission["target"] else "в процессе"
+        status = (
+            "получена"
+            if game.mission_claimed
+            else "выполнено"
+            if game.mission_progress >= game.mission["target"]
+            else "в процессе"
+        )
         lines.append(
             f"<b>Задание:</b> {esc(game.mission['name'])}\n"
             f"Прогресс: {min(game.mission_progress, game.mission['target'])}/{game.mission['target']}\n"
@@ -503,26 +543,37 @@ def render_text(game: GameState) -> str:
         lines.append(f"<b>Локация:</b> {esc(zone['name'])}\n{esc(zone['text'])}")
 
     if game.enemy:
+        enemy_type = "босс" if game.enemy["is_boss"] else "обычный моб"
         lines.append(
             f"<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}\n"
             f"HP: {game.enemy['hp']}/{game.enemy['max_hp']} | EXP: {game.enemy['exp']}\n"
             f"Типичный дроп: {esc(', '.join(game.enemy['drops']))}\n"
-            f"Тип: {'босс' if game.enemy['is_boss'] else 'обычный моб'}"
+            f"Тип: {enemy_type}"
         )
 
     if game.player and game.player.weapon_inventory:
+        page = game.equipment_page_weapon
+        items = paged_items(game.player.weapon_inventory, page)
         inv = "\n".join(
-            f"{'✅ ' if game.player.equipped_weapon_index == i else ''}{i + 1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
-            for i, g in enumerate(game.player.weapon_inventory[:8])
-        )
-        lines.append("<b>Оружие в инвентаре:</b>\n" + esc(inv))
+            f"{'✅ ' if game.player.equipped_weapon_index == game.player.weapon_inventory.index(g) else ''}"
+            f"{game.player.weapon_inventory.index(g) + 1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
+            for g in items
+        ) or "нет"
+        lines.append(f"<b>Оружие в инвентаре:</b> стр. {page + 1}\n" + esc(inv))
 
     if game.player and game.player.armor_inventory:
-        inv = "\n".join(
-            f"{'✅ ' if game.player.equipped_armor_index == i else ''}{i + 1}. {g.name} +{g.upgrade} (arm +{g.base_stat})"
-            for i, g in enumerate(game.player.armor_inventory[:8])
-        )
-        lines.append("<b>Броня в инвентаре:</b>\n" + esc(inv))
+        armor_sections: List[str] = []
+        for slot in ARMOR_SLOTS:
+            slot_items = [g for g in game.player.armor_inventory if g.slot == slot]
+            page = game.equipment_page_armor.get(slot, 0)
+            items = paged_items(slot_items, page)
+            inv = "\n".join(
+                f"{'✅ ' if game.player.equipped_armor.get(slot) == game.player.armor_inventory.index(g) else ''}"
+                f"{game.player.armor_inventory.index(g) + 1}. {g.name} +{g.upgrade} (arm +{g.base_stat})"
+                for g in items
+            ) or "нет"
+            armor_sections.append(f"{ARMOR_SLOT_NAMES[slot]} стр. {page + 1}:\n{inv}")
+        lines.append("<b>Броня в инвентаре:</b>\n" + esc("\n\n".join(armor_sections)))
 
     lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
     return "\n\n".join(lines)
@@ -563,10 +614,30 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton("Отступить", callback_data="escape")])
         return InlineKeyboardMarkup(rows)
     if game.stage == "equipment":
-        for i, _ in enumerate(game.player.weapon_inventory[:6]):
-            rows.append([InlineKeyboardButton(f"Надеть оружие {i + 1}", callback_data=f"equip_weapon:{i}")])
-        for i, _ in enumerate(game.player.armor_inventory[:6]):
-            rows.append([InlineKeyboardButton(f"Надеть броню {i + 1}", callback_data=f"equip_armor:{i}")])
+        weapon_page = game.equipment_page_weapon
+        weapon_items = paged_items(game.player.weapon_inventory, weapon_page)
+        for gear in weapon_items:
+            idx = game.player.weapon_inventory.index(gear)
+            rows.append([InlineKeyboardButton(f"Надеть оружие {idx + 1}", callback_data=f"equip_weapon:{idx}")])
+        rows.append([
+            InlineKeyboardButton("◀️ Оружие", callback_data="weapon_page_prev"),
+            InlineKeyboardButton("Оружие ▶️", callback_data="weapon_page_next"),
+        ])
+        for slot in ARMOR_SLOTS:
+            slot_items = [g for g in game.player.armor_inventory if g.slot == slot]
+            page = game.equipment_page_armor.get(slot, 0)
+            items = paged_items(slot_items, page)
+            for gear in items:
+                idx = game.player.armor_inventory.index(gear)
+                rows.append([InlineKeyboardButton(f"{ARMOR_SLOT_NAMES[slot]} {idx + 1}", callback_data=f"equip_armor:{idx}")])
+            rows.append([
+                InlineKeyboardButton(f"◀️ {ARMOR_SLOT_NAMES[slot]}", callback_data=f"armor_page_prev:{slot}"),
+                InlineKeyboardButton(f"{ARMOR_SLOT_NAMES[slot]} ▶️", callback_data=f"armor_page_next:{slot}"),
+            ])
+        rows.append([
+            InlineKeyboardButton("Разобрать оружие", callback_data="salvage_weapon"),
+            InlineKeyboardButton("Разобрать броню", callback_data="salvage_armor"),
+        ])
         rows.append([
             InlineKeyboardButton("Точить оружие", callback_data="upgrade_weapon"),
             InlineKeyboardButton("Точить броню", callback_data="upgrade_armor"),
@@ -602,9 +673,13 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/start — открыть игру\n"
         "/reset — сбросить прогресс\n"
         "/help — помощь\n\n"
-        "Теперь в игре 50 уровней, банки, броня, оружие, боссы, талики невежества и покровительства, а прогресс сохраняется в файле."
+        "Теперь в игре есть разборка шмота на компоненты, страницы в инвентаре и 5 слотов брони."
     )
     await update.effective_message.reply_text(text)
+
+
+def salvage_reward(gear: Gear) -> int:
+    return max(1, gear.level // 2 + gear.base_stat + gear.upgrade)
 
 
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -710,7 +785,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     add_log(game, f"Выпало оружие: {gear.name} +0.")
                 else:
                     game.player.armor_inventory.append(gear)
-                    add_log(game, f"Выпала броня: {gear.name} +0.")
+                    add_log(game, f"Выпала броня ({ARMOR_SLOT_NAMES[gear.slot].lower()}): {gear.name} +0.")
 
             level_up(game.player, game)
             update_mission(game, 1, 1, dizens_gain)
@@ -770,14 +845,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data.startswith("equip_armor:") and game.player:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.armor_inventory):
-            game.player.equipped_armor_index = idx
             chosen = game.player.armor_inventory[idx]
-            add_log(game, f"Ты экипировал броню: {chosen.name} +{chosen.upgrade}.")
+            game.player.equipped_armor[chosen.slot] = idx
+            add_log(game, f"Ты экипировал {ARMOR_SLOT_NAMES[chosen.slot].lower()}: {chosen.name} +{chosen.upgrade}.")
             game.stage = "equipment"
 
     elif data == "upgrade_weapon" and game.player:
         gear = current_weapon(game.player)
-        if not gear:
+        if gear is None:
             add_log(game, "Сначала экипируй оружие.")
         elif game.player.talics_ignorance <= 0:
             add_log(game, "У тебя нет талика невежества.")
@@ -794,21 +869,80 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         game.stage = "equipment"
 
     elif data == "upgrade_armor" and game.player:
-        gear = current_armor(game.player)
-        if not gear:
-            add_log(game, "Сначала экипируй броню.")
+        target = None
+        for slot in ARMOR_SLOTS:
+            piece = current_armor_piece(game.player, slot)
+            if piece is not None:
+                target = piece
+                break
+        if target is None:
+            add_log(game, "Сначала экипируй хотя бы одну часть брони.")
         elif game.player.talics_protection <= 0:
             add_log(game, "У тебя нет талика покровительства.")
-        elif gear.upgrade >= 7:
-            add_log(game, "Броня уже заточена на максимум +7.")
+        elif target.upgrade >= 7:
+            add_log(game, "Эта броня уже заточена на максимум +7.")
         else:
-            rule = UPGRADE_CHANCES[gear.upgrade]
+            rule = UPGRADE_CHANCES[target.upgrade]
             game.player.talics_protection -= 1
             if random.randint(1, 100) <= rule["chance"]:
-                gear.upgrade = rule["next"]
-                add_log(game, f"Успех. {gear.name} теперь +{gear.upgrade}.")
+                target.upgrade = rule["next"]
+                add_log(game, f"Успех. {target.name} теперь +{target.upgrade}.")
             else:
-                add_log(game, f"Неудача. {gear.name} осталось на +{gear.upgrade}.")
+                add_log(game, f"Неудача. {target.name} осталось на +{target.upgrade}.")
+        game.stage = "equipment"
+
+    elif data == "salvage_weapon" and game.player:
+        weapon = current_weapon(game.player)
+        if weapon is None:
+            add_log(game, "Сначала экипируй оружие для разборки.")
+        else:
+            idx = game.player.equipped_weapon_index
+            reward = salvage_reward(weapon)
+            game.player.components += reward
+            del game.player.weapon_inventory[idx]
+            game.player.equipped_weapon_index = None
+            add_log(game, f"Оружие разобрано на {reward} компонентов.")
+        game.stage = "equipment"
+
+    elif data == "salvage_armor" and game.player:
+        salvaged = False
+        for slot in ARMOR_SLOTS:
+            idx = game.player.equipped_armor.get(slot)
+            if idx is not None and 0 <= idx < len(game.player.armor_inventory):
+                gear = game.player.armor_inventory[idx]
+                reward = salvage_reward(gear)
+                game.player.components += reward
+                del game.player.armor_inventory[idx]
+                game.player.equipped_armor[slot] = None
+                for other_slot, other_idx in list(game.player.equipped_armor.items()):
+                    if other_idx is not None and other_idx > idx:
+                        game.player.equipped_armor[other_slot] = other_idx - 1
+                add_log(game, f"{ARMOR_SLOT_NAMES[slot]} разобрана на {reward} компонентов.")
+                salvaged = True
+                break
+        if not salvaged:
+            add_log(game, "Сначала экипируй часть брони для разборки.")
+        game.stage = "equipment"
+
+    elif data == "weapon_page_prev" and game.player:
+        game.equipment_page_weapon = max(0, game.equipment_page_weapon - 1)
+        game.stage = "equipment"
+
+    elif data == "weapon_page_next" and game.player:
+        max_page = max(0, (len(game.player.weapon_inventory) - 1) // ITEMS_PER_PAGE)
+        game.equipment_page_weapon = min(max_page, game.equipment_page_weapon + 1)
+        game.stage = "equipment"
+
+    elif data.startswith("armor_page_prev:") and game.player:
+        slot = data.split(":", 1)[1]
+        game.equipment_page_armor[slot] = max(0, game.equipment_page_armor.get(slot, 0) - 1)
+        game.stage = "equipment"
+
+    elif data.startswith("armor_page_next:") and game.player:
+        slot = data.split(":", 1)[1]
+        slot_items = [g for g in game.player.armor_inventory if g.slot == slot]
+        max_page = max(0, (len(slot_items) - 1) // ITEMS_PER_PAGE)
+        game.equipment_page_armor[slot] = min(max_page, game.equipment_page_armor.get(slot, 0) + 1)
         game.stage = "equipment"
 
     elif data == "back_hub":
@@ -820,9 +954,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data == "rates":
         add_log(
             game,
-            "Шанс дропа оружия или брони: 7%.",
+            "Шанс дропа оружия или части брони: 7%.",
             "Точки: +1 90%, +2 80%, +3 65%, +4 30%, +5 15%, +6 10%, +7 7%.",
-            "Мобы уровня N дают 2^(N-1) опыта и дропают шмот уровня N.",
+            "Шмот можно разбирать на компоненты.",
         )
 
     save_games()
@@ -862,15 +996,23 @@ def _run_self_checks() -> None:
         banks=1,
     )
     player.weapon_inventory.append(Gear("w1", "Test Weapon", "weapon", 1, "normal", "обычный", 3, 2))
-    player.armor_inventory.append(Gear("a1", "Test Armor", "armor", 1, "normal", "обычный", 2, 1))
+    player.armor_inventory.append(Gear("a1", "Test Helm", "head", 1, "normal", "обычный", 2, 1))
     player.equipped_weapon_index = 0
-    player.equipped_armor_index = 0
+    player.equipped_armor["head"] = 0
     game = GameState(player=player, mission=choose_mission())
     text = render_text(game)
     assert "Test Weapon" in text
-    assert "Test Armor" in text
+    assert "Test Helm" in text
     assert total_attack(player) > player.attack
     assert total_armor(player) > player.armor
+
+    dismantle_test = make_gear("boots", 10, False)
+    assert dismantle_test.slot == "boots"
+    assert salvage_reward(dismantle_test) > 0
+
+    test_items = [Gear(str(i), f"Item {i}", "weapon", 1, "normal", "обычный", 1) for i in range(9)]
+    assert len(paged_items(test_items, 0)) == 5
+    assert len(paged_items(test_items, 1)) == 4
 
 
 def main() -> None:
