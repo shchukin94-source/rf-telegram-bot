@@ -475,14 +475,13 @@ def update_mission(game: GameState, clears: int, loot: int, dizens: int) -> None
 def render_text(game: GameState) -> str:
     lines: List[str] = ["<b>RF Online: Text Raid</b>"]
     if not game.player:
-        lines.append("Выбери расу и класс, затем начни кампанию.")
+        lines.append("\nВыбери расу и класс, затем начни кампанию.")
     else:
         p = game.player
         weapon = current_weapon(p)
         armor = current_armor(p)
         lines.append(
-            f"
-<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}
+            f"\n<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}
 "
             f"HP: {p.hp}/{p.max_hp}
 "
@@ -507,8 +506,7 @@ def render_text(game: GameState) -> str:
     if game.mission:
         status = "получена" if game.mission_claimed else "выполнено" if game.mission_progress >= game.mission["target"] else "в процессе"
         lines.append(
-            f"
-<b>Задание:</b> {esc(game.mission['name'])}
+            f"\n<b>Задание:</b> {esc(game.mission['name'])}
 "
             f"Прогресс: {min(game.mission_progress, game.mission['target'])}/{game.mission['target']}
 "
@@ -516,13 +514,11 @@ def render_text(game: GameState) -> str:
         )
     zone = get_zone(game.current_zone_id)
     if zone:
-        lines.append(f"
-<b>Локация:</b> {esc(zone['name'])}
+        lines.append(f"\n<b>Локация:</b> {esc(zone['name'])}
 {esc(zone['text'])}")
     if game.enemy:
         lines.append(
-            f"
-<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}
+            f"\n<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}
 "
             f"HP: {game.enemy['hp']}/{game.enemy['max_hp']} | EXP: {game.enemy['exp']}
 "
@@ -531,8 +527,7 @@ def render_text(game: GameState) -> str:
             f"Тип: {'босс' if game.enemy['is_boss'] else 'обычный моб'}"
         )
     if game.player and game.player.weapon_inventory:
-        inv = "
-".join(
+        inv = "\n".join(
             f"{'✅ ' if game.player.equipped_weapon_index == i else ''}{i+1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
             for i, g in enumerate(game.player.weapon_inventory[:8])
         )
@@ -540,8 +535,7 @@ def render_text(game: GameState) -> str:
 <b>Оружие в инвентаре:</b>
 " + esc(inv))
     if game.player and game.player.armor_inventory:
-        inv = "
-".join(
+        inv = "\n".join(
             f"{'✅ ' if game.player.equipped_armor_index == i else ''}{i+1}. {g.name} +{g.upgrade} (arm +{g.base_stat})"
             for i, g in enumerate(game.player.armor_inventory[:8])
         )
@@ -550,10 +544,8 @@ def render_text(game: GameState) -> str:
 " + esc(inv))
     lines.append("
 <b>Журнал:</b>
-" + esc("
-".join(game.log[-8:])))
-    return "
-".join(lines)
+" + esc("\n".join(game.log[-8:])))
+    return "\n".join(lines)
 
 
 def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
