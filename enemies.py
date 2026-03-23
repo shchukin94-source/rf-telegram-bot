@@ -79,7 +79,7 @@ def generate_enemy(zone_id: str, monster_entry: dict) -> dict:
         "max_hp": hp,
         "attack": atk,
         "exp": exp,
-        "drops": list(zone["drops"] if zone else []),
+        "drops": list(zone.get("loot", []) if zone else []),
         "is_boss": False,
         "elite": elite,
         "legendary": legendary,
