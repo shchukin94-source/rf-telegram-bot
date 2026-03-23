@@ -227,3 +227,18 @@ SUPER_DROP_CHANCES = {
     "enhancement_core": 5,     # 0.5%
     "absolute_talic": 2,       # 0.2%
 }
+
+MARKET_PRICES = {
+    "buy_bank": 20,
+    "buy_components_pack": 25,
+    "buy_random_weapon": 120,
+    "sell_bank": 8,
+    "sell_components_pack": 15,
+    "rare_ore_for_container": 30,
+}
+
+SUPER_DROP_CHANCES = {
+    "ancient_container": 10,
+    "enhancement_core": 5,
+    "absolute_talic": 2,
+}
