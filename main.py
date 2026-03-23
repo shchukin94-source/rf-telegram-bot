@@ -45,9 +45,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
+TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
 USER_GAMES = load_games()
-
+MAX_BANKS = 20
 
 def get_race(race_id: str) -> dict:
     return next(x for x in RACES if x["id"] == race_id)
@@ -259,8 +259,11 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 game.player.rare_ore += 1
                 add_log(game, "Получена Редкая Руда.")
             elif loot == "банка HP":
-                game.player.banks += 1
-                add_log(game, "Получена Банка.")
+                if game.player.banks < MAX_BANKS:
+                    game.player.banks += 1
+                    add_log(game, "Получена Банка.")
+                else:
+                    add_log(game, f"Банка выпала, но инвентарь полон ({MAX_BANKS}).")
             else:
                 extra_rolls = 10 if game.enemy.get("elite") else 1
 
@@ -373,14 +376,20 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif data == "rest" and game.player:
         game.player.hp = game.player.max_hp
-        game.player.banks += 1
-        add_log(game, "На базе ты восстановил здоровье и получил 1 банку.")
+        old_banks = game.player.banks
+        game.player.banks = min(MAX_BANKS, game.player.banks + 3)
+        if game.player.banks > old_banks:
+            add_log(game, "На базе ты восстановил здоровье и получил объюзные 3 банки.")
+        else:
+            add_log(game, f"На базе ты восстановил здоровье. Лимит банок: {MAX_BANKS}.")
 
     elif data == "buy_bank" and game.player:
         price = MARKET_PRICES["buy_bank"]
-        if game.player.dizens >= price:
+        if game.player.banks >= MAX_BANKS:
+            add_log(game, f"Лимит банок: {MAX_BANKS}.")
+        elif game.player.dizens >= price:
             game.player.dizens -= price
-            game.player.banks += 1
+            game.player.banks = min(MAX_BANKS, game.player.banks + 1)
             add_log(game, "Куплена 1 банка.")
         else:
             add_log(game, "Не хватает дизен.")
@@ -407,8 +416,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data == "sell_bank" and game.player:
         if game.player.banks > 0:
             game.player.banks -= 1
-            game.player.dizens += MARKET_PRICES["sell_bank"]
-            add_log(game, "Продана 1 банка.")
+            add_log(game, "Банка выброшена. Цена продажи: 0.")
+        else:
+            add_log(game, "У тебя нет лишней банки.")
         else:
             add_log(game, "У тебя нет лишней банки.")
 
