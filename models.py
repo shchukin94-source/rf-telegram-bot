@@ -64,6 +64,7 @@ class GameState:
     equipment_page_weapon: int = 0
     market_weapon_page: int = 0
     salvage_page: int = 0
+    stage_page: int = 0
     equipment_page_armor: Dict[str, int] = field(
         default_factory=lambda: {slot: 0 for slot in ARMOR_SLOTS}
     )
