@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -22,7 +23,8 @@ SAVE_FILE = Path("games.json")
 MAX_LEVEL = 50
 ITEMS_PER_PAGE = 5
 DROP_GEAR_CHANCE = 7
-BOSS_CHANCE = 8
+DEATH_COOLDOWN_SECONDS = 60
+
 ARMOR_SLOTS = ["head", "torso", "legs", "arms", "boots"]
 ARMOR_SLOT_NAMES = {
     "head": "Голова",
@@ -65,42 +67,36 @@ LOCATION_MONSTERS = {
         {"name": "Аргол", "level": 18},
         {"name": "Трицератопс", "level": 19},
         {"name": "Скорпион", "level": 20},
-        {"name": "Красный Раптор", "level": 21},
     ],
     "haram_colony": [
-        {"name": "Штурмовой Дрон", "level": 22},
-        {"name": "Клаан Берсерк", "level": 23},
-        {"name": "Ядовитый Раптор", "level": 24},
-        {"name": "Скарабей Харам", "level": 25},
-        {"name": "Гвардеец Харам", "level": 26},
-        {"name": "Костяной Стригой", "level": 27},
-        {"name": "Мясник Колонии", "level": 28},
-        {"name": "Пустынный Аргол", "level": 29},
-        {"name": "Крушитель Харам", "level": 30},
+        {"name": "Гиперморф", "level": 21},
+        {"name": "Взрослый Трицератопс", "level": 22},
+        {"name": "Змееголов Убийца", "level": 23},
+        {"name": "Змееголов Ракетчик", "level": 24},
+        {"name": "Слизень", "level": 25},
+        {"name": "Наяда", "level": 26},
+        {"name": "Древний Скарабей", "level": 27},
+        {"name": "Брутальная Медведка", "level": 28},
+        {"name": "Болотный Гиперморф", "level": 29},
+        {"name": "Богомол", "level": 30},
+        {"name": "Богомол Доминант", "level": 31},
+        {"name": "Король Змееголовов", "level": 34},
+        {"name": "Создатель Убийц Альфа (А)", "level": 40, "elite": True},
     ],
-    "numerus_colony": [
-        {"name": "Охотник Нумерус", "level": 31},
-        {"name": "Черный Клаан", "level": 32},
-        {"name": "Резчик Пустошей", "level": 33},
-        {"name": "Титан Нумерус", "level": 34},
-        {"name": "Жало Сектора", "level": 35},
-        {"name": "Разъяренный Аргол", "level": 36},
-        {"name": "Громорог", "level": 37},
-        {"name": "Пожиратель Колонии", "level": 38},
-        {"name": "Стальной Раптор", "level": 39},
-        {"name": "Боевой Скорпион", "level": 40},
+    "volcano": [
+        {"name": "Магмойд", "level": 40},
+        {"name": "Мотылек", "level": 41},
+        {"name": "Сверкающий Мотылек", "level": 42},
+        {"name": "Капитан Клувер", "level": 43},
+        {"name": "Магмовый Убийца", "level": 44},
+        {"name": "Орк Предводитель", "level": 45},
+        {"name": "Гигансткий Орк (А)", "level": 46, "elite": True},
+        {"name": "Красный Псевдодракон", "level": 47},
     ],
     "krag_mines": [
-        {"name": "Шахтный Разоритель", "level": 41},
-        {"name": "Глубинный Крушитель", "level": 42},
-        {"name": "Пещерный Тиран", "level": 43},
-        {"name": "Коготь Шахт", "level": 44},
-        {"name": "Леон Страж", "level": 45},
-        {"name": "Безумный Трицератопс", "level": 46},
-        {"name": "Горный Палач", "level": 47},
-        {"name": "Каменный Раптор", "level": 48},
-        {"name": "Глубинный Скорпион", "level": 49},
-        {"name": "Повелитель Шахт", "level": 50},
+        {"name": "Шахтный Разоритель", "level": 48},
+        {"name": "Глубинный Крушитель", "level": 49},
+        {"name": "Пещерный Тиран", "level": 50},
     ],
 }
 
@@ -108,41 +104,41 @@ ZONES = [
     {
         "id": "alliance_outpost",
         "name": "Аванпост Альянса",
-        "text": "Стартовая территория с мобами 1-21 уровня.",
+        "text": "Стартовая территория с мобами 1-20 уровня.",
         "loot": ["необработанная руда", "банка HP", "Talic Fragment"],
         "bosses": [
             {"name": "Командир Аванпоста", "level": 15, "drops": ["талик невежества", "талик покровительства", "талик грации", "ящик офицера"], "dizens": [35, 55]},
-            {"name": "Зверь Альянса", "level": 21, "drops": ["талик невежества", "талик грации", "редкий контейнер аванпоста"], "dizens": [45, 70]},
+            {"name": "Зверь Альянса", "level": 20, "drops": ["талик невежества", "талик грации", "редкий контейнер аванпоста"], "dizens": [45, 70]},
         ],
     },
     {
         "id": "haram_colony",
         "name": "Колония Харам",
-        "text": "Средняя зона с мобами 22-30 уровня.",
+        "text": "Болотная локация с мобами 21-40 уровня.",
         "loot": ["Blue Ore", "банка HP", "Talic Crystal", "анимус-чип"],
         "bosses": [
-            {"name": "Хранитель Харам", "level": 27, "drops": ["талик невежества", "талик покровительства", "талик грации", "контейнер Харам"], "dizens": [70, 100]},
-            {"name": "Кровавый Берсерк", "level": 30, "drops": ["талик невежества", "талик грации", "ядро Харам"], "dizens": [80, 115]},
+            {"name": "Хранитель Харам", "level": 31, "drops": ["талик невежества", "талик покровительства", "талик грации", "контейнер Харам"], "dizens": [70, 100]},
+            {"name": "Кровавый Берсерк", "level": 34, "drops": ["талик невежества", "талик грации", "ядро Харам"], "dizens": [80, 115]},
         ],
     },
     {
-        "id": "numerus_colony",
-        "name": "Колония Нумерус",
-        "text": "Тяжёлая зона с мобами 31-40 уровня.",
+        "id": "volcano",
+        "name": "Вулкан",
+        "text": "Огненная локация с мобами 40-47 уровня.",
         "loot": ["Red Ore", "банка HP", "Talic Crystal", "Intense Part"],
         "bosses": [
-            {"name": "Тиран Нумерус", "level": 38, "drops": ["талик невежества", "талик покровительства", "талик грации", "Leon Core"], "dizens": [120, 170]},
-            {"name": "Палач Нумерус", "level": 40, "drops": ["талик покровительства", "талик грации", "сундук Нумерус"], "dizens": [130, 185]},
+            {"name": "Властитель Вулкана", "level": 47, "drops": ["талик невежества", "талик покровительства", "талик грации", "Leon Core"], "dizens": [120, 170]},
+            {"name": "Пылающий Тиран", "level": 48, "drops": ["талик покровительства", "талик грации", "сундук Вулкана"], "dizens": [130, 185]},
         ],
     },
     {
         "id": "krag_mines",
         "name": "Краговые Шахты",
-        "text": "Эндгейм зона с мобами 41-50 уровня.",
+        "text": "Эндгейм зона с топовым дропом.",
         "loot": ["Golden Ore", "банка HP", "Rare Box", "Leon Fragment"],
         "bosses": [
             {"name": "Король Шахт", "level": 50, "drops": ["талик невежества", "талик покровительства", "талик грации", "Leon Relic"], "dizens": [200, 280]},
-            {"name": "Леон Надзиратель", "level": 49, "drops": ["талик невежества", "талик грации", "набор шахт"], "dizens": [180, 250]},
+            {"name": "Леон Надзиратель", "level": 50, "drops": ["талик невежества", "талик грации", "набор шахт"], "dizens": [180, 250]},
         ],
     },
 ]
@@ -163,7 +159,7 @@ GEAR_TIERS = [
     {"id": "normal", "name": "обычный", "weapon_mult": 1.0, "armor_mult": 1.0, "weight": 66},
     {"id": "int", "name": "инт", "weapon_mult": 1.28, "armor_mult": 1.25, "weight": 22},
     {"id": "type_c", "name": "тип с", "weapon_mult": 1.68, "armor_mult": 1.62, "weight": 9},
-    {"id": "leon", "name": "леон", "weapon_mult": 2.25, "armor_mult": 2.1, "weight": 3},
+    {"id": "leon", "name": "леон", "weapon_mult": 2.25, "armor_mult": 2.10, "weight": 3},
 ]
 
 WEAPON_NAMES = ["Нож Flym", "Клинок Wing", "Пускатель Digger", "Копьё Flem", "Разрушитель Crawler", "Леон Блейд"]
@@ -235,11 +231,7 @@ class GameState:
     selected_monster_index: Optional[int] = None
     enemy: Optional[dict] = None
     battle_count: int = 0
-    mission: Optional[dict] = None
-    mission_progress: int = 0
-    mission_claimed: bool = False
-    ended: bool = False
-    win: bool = False
+    dead_until_ts: Optional[int] = None
     equipment_page_weapon: int = 0
     equipment_page_armor: Dict[str, int] = field(default_factory=lambda: {slot: 0 for slot in ARMOR_SLOTS})
     log: List[str] = field(default_factory=lambda: [
@@ -251,12 +243,23 @@ class GameState:
 USER_GAMES: Dict[int, GameState] = {}
 
 
+def now_ts() -> int:
+    return int(time.time())
+
+
+def cooldown_left(game: GameState) -> int:
+    if not game.dead_until_ts:
+        return 0
+    return max(0, game.dead_until_ts - now_ts())
+
+
 def exp_needed_for_next(level: int) -> int:
     return 80 * level + 40 * (level * level)
 
 
-def mob_exp(level: int) -> int:
-    return max(4, level * level + level * 3)
+def mob_exp(level: int, elite: bool = False) -> int:
+    base = max(4, level * level + level * 3)
+    return base * 10 if elite else base
 
 
 def save_games() -> None:
@@ -287,11 +290,7 @@ def load_games() -> None:
             selected_monster_index=game_data.get("selected_monster_index"),
             enemy=game_data.get("enemy"),
             battle_count=game_data.get("battle_count", 0),
-            mission=game_data.get("mission"),
-            mission_progress=game_data.get("mission_progress", 0),
-            mission_claimed=game_data.get("mission_claimed", False),
-            ended=game_data.get("ended", False),
-            win=game_data.get("win", False),
+            dead_until_ts=game_data.get("dead_until_ts"),
             equipment_page_weapon=game_data.get("equipment_page_weapon", 0),
             equipment_page_armor=game_data.get("equipment_page_armor", {slot: 0 for slot in ARMOR_SLOTS}),
             log=game_data.get("log", []),
@@ -324,7 +323,7 @@ def esc(text: str) -> str:
 
 def add_log(game: GameState, *lines: str) -> None:
     game.log.extend(lines)
-    game.log = game.log[-20:]
+    game.log = game.log[-8:]
 
 
 def current_weapon(player: Player) -> Optional[Gear]:
@@ -349,7 +348,7 @@ def current_armor_piece(player: Player, slot: str) -> Optional[Gear]:
 
 
 def set_bonus(player: Player) -> Dict[str, int]:
-    tiers = []
+    tiers: List[str] = []
     for slot in ARMOR_SLOTS:
         piece = current_armor_piece(player, slot)
         if piece:
@@ -393,12 +392,12 @@ def total_armor(player: Player) -> int:
 
 
 def roll_weighted_tier(is_boss: bool) -> dict:
-    weights = []
+    weights: List[int] = []
     for tier in GEAR_TIERS:
-      weight = tier["weight"]
-      if is_boss and tier["id"] in {"type_c", "leon"}:
-          weight *= 3
-      weights.append(weight)
+        weight = tier["weight"]
+        if is_boss and tier["id"] in {"type_c", "leon"}:
+            weight *= 3
+        weights.append(weight)
     return random.choices(GEAR_TIERS, weights=weights, k=1)[0]
 
 
@@ -421,57 +420,67 @@ def make_gear(slot: str, level: int, is_boss: bool) -> Gear:
     )
 
 
-def maybe_gear_drop(enemy_level: int, is_boss: bool) -> Optional[Gear]:
-    chance = 100 if is_boss else DROP_GEAR_CHANCE
-    if random.randint(1, 100) > chance:
+def maybe_gear_drop(enemy_level: int, is_boss: bool, elite: bool = False) -> Optional[Gear]:
+    chance = 100 if is_boss else (DROP_GEAR_CHANCE * 10 if elite else DROP_GEAR_CHANCE)
+    if random.randint(1, 100) > min(100, chance):
         return None
     slot = random.choice(["weapon"] + ARMOR_SLOTS)
-    return make_gear(slot, enemy_level, is_boss)
+    return make_gear(slot, enemy_level, is_boss or elite)
 
 
 def selected_monsters_for_zone(zone_id: str) -> List[dict]:
-    bosses = []
+    monsters = [{**m, "boss": None} for m in LOCATION_MONSTERS.get(zone_id, [])]
     zone = get_zone(zone_id)
     if zone:
         for boss in zone["bosses"]:
-            bosses.append({"name": f"[БОСС] {boss['name']}", "level": boss["level"], "boss": boss})
-    monsters = [{**m, "boss": None} for m in LOCATION_MONSTERS.get(zone_id, [])]
-    return monsters + bosses
+            monsters.append({"name": f"[БОСС] {boss['name']}", "level": boss["level"], "boss": boss})
+    return monsters
 
 
 def generate_enemy(zone_id: str, monster_entry: dict) -> dict:
     level = monster_entry["level"]
     is_boss = monster_entry.get("boss") is not None
+    elite = monster_entry.get("elite", False)
     if is_boss:
         boss = monster_entry["boss"]
-        hp = 120 + level * 36
-        atk = 12 + level * 3
+        hp = 180 + level * 42
+        atk = 16 + level * 3
         return {
             "name": boss["name"],
             "level": level,
             "hp": hp,
             "max_hp": hp,
             "attack": atk,
-            "exp": mob_exp(level) * 4,
+            "exp": mob_exp(level) * 5,
             "drops": list(boss["drops"]),
             "is_boss": True,
+            "elite": False,
             "reward_min": boss["dizens"][0],
             "reward_max": boss["dizens"][1],
         }
     zone = get_zone(zone_id)
-    hp = 30 + level * 18
-    atk = 4 + level * 2
+    hp = 40 + level * 22
+    atk = 5 + level * 2
+    exp = mob_exp(level, elite)
+    reward_min = 4 + level * 2
+    reward_max = 7 + level * 3
+    if elite:
+        hp *= 5
+        atk *= 3
+        reward_min *= 10
+        reward_max *= 10
     return {
         "name": monster_entry["name"],
         "level": level,
         "hp": hp,
         "max_hp": hp,
         "attack": atk,
-        "exp": mob_exp(level),
+        "exp": exp,
         "drops": list(zone["loot"] if zone else []),
         "is_boss": False,
-        "reward_min": 3 + level * 2,
-        "reward_max": 6 + level * 3,
+        "elite": elite,
+        "reward_min": reward_min,
+        "reward_max": reward_max,
     }
 
 
@@ -484,7 +493,8 @@ def level_up(player: Player, game: GameState) -> None:
         player.attack += 2
         player.armor += 1
         player.crit += 1
-        add_log(game, f"Новый уровень: {player.level}. Нужно {exp_needed_for_next(player.level) if player.level < MAX_LEVEL else 'MAX'} опыта до следующего.")
+        next_req = exp_needed_for_next(player.level) if player.level < MAX_LEVEL else "MAX"
+        add_log(game, f"Новый уровень: {player.level}. До следующего: {next_req} exp.")
 
 
 def paged_items(items: List, page: int) -> List:
@@ -511,62 +521,40 @@ def render_text(game: GameState) -> str:
         lines.append("Выбери расу и класс, затем начни кампанию.")
     else:
         p = game.player
-        weapon = current_weapon(p)
         set_info = set_bonus(p)
-        armor_lines = []
-        for slot in ARMOR_SLOTS:
-            piece = current_armor_piece(p, slot)
-            piece_name = f"{piece.name} +{piece.upgrade}" if piece else "нет"
-            armor_lines.append(f"{ARMOR_SLOT_NAMES[slot]}: {piece_name}")
         lines.append(
             f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
             f"HP: {p.hp}/{p.max_hp}\n"
-            f"Базовая атака: {p.attack} | Общая атака: {total_attack(p)}\n"
-            f"Базовая броня: {p.armor} | Общая броня: {total_armor(p)}\n"
+            f"ATK: {total_attack(p)} | ARM: {total_armor(p)}\n"
             f"Крит: {p.crit}% | Уворот: {current_dodge(p)}%\n"
             f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components}\n"
-            f"Талики невежества: {p.talics_ignorance} | Талики покровительства: {p.talics_protection} | Талики грации: {p.talics_grace}\n"
-            f"Оружие: {esc(f'{weapon.name} +{weapon.upgrade}' if weapon else 'нет')}\n"
-            f"{esc(chr(10).join(armor_lines))}\n"
-            f"Бонус набора: ATK +{set_info['attack']}, ARM +{set_info['armor']}\n"
-            f"Вылазки: {p.clears} | Лут: {p.loot_count}\n"
-            f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}"
+            f"Талики: Н {p.talics_ignorance} / П {p.talics_protection} / Г {p.talics_grace}\n"
+            f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}\n"
+            f"Бонус набора: ATK +{set_info['attack']}, ARM +{set_info['armor']}"
         )
-    zone = get_zone(game.current_zone_id)
-    if zone:
-        lines.append(f"<b>Локация:</b> {esc(zone['name'])}\n{esc(zone['text'])}")
+
     if game.current_zone_id and game.stage == "zone_select":
         monsters = selected_monsters_for_zone(game.current_zone_id)
         page_items = paged_items(monsters, game.selected_monster_page)
-        monster_text = "\n".join([f"{idx + 1}. {m['name']} ({m['level']})" for idx, m in enumerate(page_items, start=game.selected_monster_page * ITEMS_PER_PAGE)])
-        lines.append(f"<b>Выбор монстра:</b> стр. {game.selected_monster_page + 1}\n{esc(monster_text or 'нет монстров')}" )
+        monster_text = "\n".join(
+            f"{idx + 1}. {m['name']} ({m['level']})"
+            for idx, m in enumerate(page_items, start=game.selected_monster_page * ITEMS_PER_PAGE)
+        )
+        lines.append(
+            f"<b>Выбор монстра:</b> стр. {game.selected_monster_page + 1}\n"
+            f"{esc(monster_text or 'нет монстров')}"
+        )
+
     if game.enemy:
         lines.append(
-            f"<b>Враг:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}\n"
+            f"<b>Монстр:</b> {esc(game.enemy['name'])} | lvl {game.enemy['level']}\n"
             f"HP: {game.enemy['hp']}/{game.enemy['max_hp']} | EXP: {game.enemy['exp']}\n"
-            f"Типичный дроп: {esc(', '.join(game.enemy['drops']))}\n"
-            f"Тип: {'босс' if game.enemy['is_boss'] else 'обычный моб'}"
+            f"Дроп: {esc(', '.join(game.enemy['drops']))}"
         )
-    if game.player and game.player.weapon_inventory:
-        page = game.equipment_page_weapon
-        items = paged_items(game.player.weapon_inventory, page)
-        inv = "\n".join(
-            f"{'✅ ' if game.player.equipped_weapon_index == game.player.weapon_inventory.index(g) else ''}{game.player.weapon_inventory.index(g) + 1}. {g.name} +{g.upgrade} (atk +{g.base_stat})"
-            for g in items
-        ) or "нет"
-        lines.append(f"<b>Оружие:</b> стр. {page + 1}\n" + esc(inv))
-    if game.player and game.player.armor_inventory:
-        sections = []
-        for slot in ARMOR_SLOTS:
-            slot_items = [g for g in game.player.armor_inventory if g.slot == slot]
-            page = game.equipment_page_armor.get(slot, 0)
-            items = paged_items(slot_items, page)
-            inv = "\n".join(
-                f"{'✅ ' if game.player.equipped_armor.get(slot) == game.player.armor_inventory.index(g) else ''}{game.player.armor_inventory.index(g) + 1}. {g.name} +{g.upgrade}"
-                for g in items
-            ) or "нет"
-            sections.append(f"{ARMOR_SLOT_NAMES[slot]} стр. {page + 1}:\n{inv}")
-        lines.append("<b>Броня:</b>\n" + esc("\n\n".join(sections)))
+
+    if cooldown_left(game) > 0:
+        lines.append(f"<b>Откат после смерти:</b> {cooldown_left(game)} сек.")
+
     lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
     return "\n\n".join(lines)
 
@@ -578,11 +566,9 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(c["name"], callback_data=f"class:{c['id']}") for c in CLASSES])
         rows.append([InlineKeyboardButton("Начать кампанию", callback_data="start_game")])
         return InlineKeyboardMarkup(rows)
-    if game.ended:
-        rows.append([InlineKeyboardButton("Начать заново", callback_data="reset")])
-        return InlineKeyboardMarkup(rows)
+
     if game.stage == "hub":
-        zone_buttons = [InlineKeyboardButton(z["name"], callback_data=f"zone:{z['id']}" ) for z in ZONES]
+        zone_buttons = [InlineKeyboardButton(z["name"], callback_data=f"zone:{z['id']}") for z in ZONES]
         for i in range(0, len(zone_buttons), 2):
             rows.append(zone_buttons[i:i + 2])
         rows.append([
@@ -594,6 +580,7 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Крафт брони", callback_data="craft_armor"),
         ])
         return InlineKeyboardMarkup(rows)
+
     if game.stage == "zone_select":
         monsters = selected_monsters_for_zone(game.current_zone_id)
         page_items = paged_items(monsters, game.selected_monster_page)
@@ -605,13 +592,15 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
         ])
         rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
+
     if game.stage == "combat":
         rows.append([
             InlineKeyboardButton("Атаковать", callback_data="attack"),
             InlineKeyboardButton("Банка", callback_data="bank"),
         ])
-        rows.append([InlineKeyboardButton("Отступить", callback_data="back_zone_select")])
+        rows.append([InlineKeyboardButton("Сменить монстра", callback_data="back_zone_select")])
         return InlineKeyboardMarkup(rows)
+
     if game.stage == "equipment":
         weapon_items = paged_items(game.player.weapon_inventory, game.equipment_page_weapon)
         for gear in weapon_items:
@@ -621,6 +610,7 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
             InlineKeyboardButton("◀️ Оружие", callback_data="weapon_page_prev"),
             InlineKeyboardButton("Оружие ▶️", callback_data="weapon_page_next"),
         ])
+
         for slot in ARMOR_SLOTS:
             slot_items = [g for g in game.player.armor_inventory if g.slot == slot]
             items = paged_items(slot_items, game.equipment_page_armor.get(slot, 0))
@@ -631,19 +621,19 @@ def render_keyboard(game: GameState) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"◀️ {ARMOR_SLOT_NAMES[slot]}", callback_data=f"armor_page_prev:{slot}"),
                 InlineKeyboardButton(f"{ARMOR_SLOT_NAMES[slot]} ▶️", callback_data=f"armor_page_next:{slot}"),
             ])
+            rows.append([InlineKeyboardButton(f"Точить {ARMOR_SLOT_NAMES[slot]}", callback_data=f"upgrade_armor_slot:{slot}")])
+
         rows.append([
             InlineKeyboardButton("Точить оружие", callback_data="upgrade_weapon"),
-            InlineKeyboardButton("Точить броню", callback_data="upgrade_armor"),
-        ])
-        rows.append([
             InlineKeyboardButton("Точить тапки грацией", callback_data="upgrade_boots_grace"),
-            InlineKeyboardButton("Разобрать оружие", callback_data="salvage_weapon"),
         ])
         rows.append([
+            InlineKeyboardButton("Разобрать оружие", callback_data="salvage_weapon"),
             InlineKeyboardButton("Разобрать броню", callback_data="salvage_armor"),
-            InlineKeyboardButton("На базу", callback_data="back_hub"),
         ])
+        rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
+
     rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
     return InlineKeyboardMarkup(rows)
 
@@ -671,9 +661,9 @@ async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         "/start — открыть игру\n"
-        "/reset — сбросить прогресс\n"
+        "/reset — полный сброс прогресса\n"
         "/help — помощь\n\n"
-        "Теперь после выбора локации можно выбирать конкретного моба по уровню и фармить его."
+        "После выбора локации можно выбрать конкретного монстра и фармить его без повторного выбора после победы."
     )
     await update.effective_message.reply_text(text)
 
@@ -684,6 +674,12 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = query.from_user.id
     game = get_game(user_id)
     data = query.data
+
+    if cooldown_left(game) > 0 and data not in {"back_hub", "reset"}:
+        add_log(game, f"Ты мертв. Подожди {cooldown_left(game)} сек.")
+        save_games()
+        await send_or_edit(update, render_text(game), render_keyboard(game))
+        return
 
     if data == "reset":
         USER_GAMES[user_id] = GameState()
@@ -722,7 +718,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 f"Ты выбрал расу {race['name']} и класс {klass['name']}.",
                 race["desc"],
                 klass["desc"],
-                "Командование открыло доступ к локациям и ручному выбору мобов.",
+                "Открыт ручной выбор мобов по уровню.",
             ]
 
     elif data.startswith("zone:") and game.player:
@@ -730,12 +726,13 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         game.current_zone_id = zone_id
         game.stage = "zone_select"
         game.selected_monster_page = 0
-        add_log(game, f"Локация: {get_zone(zone_id)['name']}. Теперь выбери конкретного монстра.")
+        zone = get_zone(zone_id)
+        add_log(game, f"Локация: {zone['name']}. Выбери монстра.")
 
-    elif data == "monster_page_prev" and game.player:
+    elif data == "monster_page_prev":
         game.selected_monster_page = max(0, game.selected_monster_page - 1)
 
-    elif data == "monster_page_next" and game.player and game.current_zone_id:
+    elif data == "monster_page_next" and game.current_zone_id:
         monsters = selected_monsters_for_zone(game.current_zone_id)
         max_page = max(0, (len(monsters) - 1) // ITEMS_PER_PAGE)
         game.selected_monster_page = min(max_page, game.selected_monster_page + 1)
@@ -747,7 +744,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             game.selected_monster_index = idx
             game.enemy = generate_enemy(game.current_zone_id, monsters[idx])
             game.stage = "combat"
-            add_log(game, f"Ты выбрал цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+            add_log(game, f"Цель: {game.enemy['name']} lv.{game.enemy['level']}.")
 
     elif data == "attack" and game.player and game.enemy:
         crit = random.randint(1, 100) <= game.player.crit
@@ -755,7 +752,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if crit:
             dmg *= 2
         game.enemy["hp"] -= dmg
-        add_log(game, f"Ты наносишь {dmg} урона." + (" Критический удар!" if crit else ""))
+        add_log(game, f"Ты наносишь {dmg} урона." + (" Крит!" if crit else ""))
+
         if game.enemy["hp"] <= 0:
             dizens_gain = random.randint(game.enemy["reward_min"], game.enemy["reward_max"])
             exp_gain = game.enemy["exp"]
@@ -764,7 +762,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             game.player.exp += exp_gain
             game.player.loot_count += 1
             game.player.clears += 1
-            add_log(game, f"Враг повержен. Награда: {dizens_gain} дизен, {exp_gain} опыта, добыча: {loot}.")
+            add_log(game, f"Победа. +{dizens_gain} дизен, +{exp_gain} exp, дроп: {loot}.")
+
             if loot == "талик невежества":
                 game.player.talics_ignorance += 1
             elif loot == "талик покровительства":
@@ -772,38 +771,53 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             elif loot == "талик грации":
                 game.player.talics_grace += 1
             else:
-                if random.randint(1, 100) <= 3:
-                    game.player.talics_ignorance += 1
-                    add_log(game, "Доп. редкий дроп: талик невежества.")
-                if random.randint(1, 100) <= 3:
-                    game.player.talics_protection += 1
-                    add_log(game, "Доп. редкий дроп: талик покровительства.")
-                if random.randint(1, 100) <= 2:
-                    game.player.talics_grace += 1
-                    add_log(game, "Доп. редкий дроп: талик грации.")
-            gear = maybe_gear_drop(game.enemy["level"], game.enemy["is_boss"])
+                extra_rolls = 10 if game.enemy.get("elite") else 1
+                for _ in range(extra_rolls):
+                    if random.randint(1, 100) <= 3:
+                        game.player.talics_ignorance += 1
+                        add_log(game, "Доп. дроп: талик невежества.")
+                        break
+                for _ in range(extra_rolls):
+                    if random.randint(1, 100) <= 3:
+                        game.player.talics_protection += 1
+                        add_log(game, "Доп. дроп: талик покровительства.")
+                        break
+                for _ in range(extra_rolls):
+                    if random.randint(1, 100) <= 2:
+                        game.player.talics_grace += 1
+                        add_log(game, "Доп. дроп: талик грации.")
+                        break
+
+            gear = maybe_gear_drop(game.enemy["level"], game.enemy["is_boss"], game.enemy.get("elite", False))
             if gear:
                 if gear.slot == "weapon":
                     game.player.weapon_inventory.append(gear)
                     add_log(game, f"Выпало оружие: {gear.name} +0.")
                 else:
                     game.player.armor_inventory.append(gear)
-                    add_log(game, f"Выпала броня ({ARMOR_SLOT_NAMES[gear.slot].lower()}): {gear.name} +0.")
+                    add_log(game, f"Выпала броня: {gear.name} +0.")
+
             level_up(game.player, game)
-            game.enemy = None
-            game.stage = "zone_select"
+            if game.selected_monster_index is not None and game.current_zone_id:
+                monsters = selected_monsters_for_zone(game.current_zone_id)
+                game.enemy = generate_enemy(game.current_zone_id, monsters[game.selected_monster_index])
+                add_log(game, f"Следующая цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+            else:
+                game.enemy = None
+                game.stage = "zone_select"
         else:
             if random.randint(1, 100) <= current_dodge(game.player):
                 add_log(game, f"Ты увернулся от атаки {game.enemy['name']}.")
             else:
                 enemy_dmg = max(1, game.enemy["attack"] + random.randint(0, 4) - total_armor(game.player) // 3)
                 game.player.hp -= enemy_dmg
-                add_log(game, f"{game.enemy['name']} отвечает и наносит {enemy_dmg} урона.")
+                add_log(game, f"{game.enemy['name']} наносит {enemy_dmg} урона.")
                 if game.player.hp <= 0:
                     game.player.hp = 0
-                    game.ended = True
-                    game.stage = "end"
-                    add_log(game, "Ты пал в бою. Прогресс сохранён.")
+                    game.dead_until_ts = now_ts() + DEATH_COOLDOWN_SECONDS
+                    game.stage = "hub"
+                    game.enemy = None
+                    add_log(game, "Ты погиб. Все сохранено. Откат 60 секунд.")
 
     elif data == "bank" and game.player:
         if game.player.banks > 0:
@@ -817,7 +831,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data == "rest" and game.player:
         game.player.hp = game.player.max_hp
         game.player.banks += 1
-        add_log(game, "На базе ты полностью восстановил здоровье и получил 1 банку.")
+        add_log(game, "На базе ты восстановил здоровье и получил 1 банку.")
 
     elif data == "equipment" and game.player:
         game.stage = "equipment"
@@ -826,23 +840,24 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.weapon_inventory):
             game.player.equipped_weapon_index = idx
-            add_log(game, f"Ты экипировал оружие: {game.player.weapon_inventory[idx].name} +{game.player.weaponInventory[idx].upgrade if False else game.player.weapon_inventory[idx].upgrade}.")
+            weapon = game.player.weapon_inventory[idx]
+            add_log(game, f"Экипировано оружие: {weapon.name} +{weapon.upgrade}.")
 
     elif data.startswith("equip_armor:") and game.player:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.armor_inventory):
             chosen = game.player.armor_inventory[idx]
             game.player.equipped_armor[chosen.slot] = idx
-            add_log(game, f"Ты экипировал {ARMOR_SLOT_NAMES[chosen.slot].lower()}: {chosen.name} +{chosen.upgrade}.")
+            add_log(game, f"Экипировано: {ARMOR_SLOT_NAMES[chosen.slot]} {chosen.name} +{chosen.upgrade}.")
 
     elif data == "upgrade_weapon" and game.player:
         gear = current_weapon(game.player)
         if gear is None:
             add_log(game, "Сначала экипируй оружие.")
         elif game.player.talics_ignorance <= 0:
-            add_log(game, "У тебя нет талика невежества.")
+            add_log(game, "Нет талика невежества.")
         elif gear.upgrade >= 7:
-            add_log(game, "Оружие уже заточено на максимум +7.")
+            add_log(game, "Оружие уже +7.")
         else:
             rule = UPGRADE_CHANCES[gear.upgrade]
             game.player.talics_ignorance -= 1
@@ -852,36 +867,34 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 add_log(game, f"Неудача. {gear.name} осталось на +{gear.upgrade}.")
 
-    elif data == "upgrade_armor" and game.player:
-        upgraded = False
-        for slot in ["head", "torso", "legs", "arms"]:
-            piece = current_armor_piece(game.player, slot)
-            if piece:
-                if game.player.talics_protection <= 0:
-                    add_log(game, "У тебя нет талика покровительства.")
-                elif piece.upgrade >= 7:
-                    add_log(game, f"{piece.name} уже на +7.")
-                else:
-                    rule = UPGRADE_CHANCES[piece.upgrade]
-                    game.player.talics_protection -= 1
-                    if random.randint(1, 100) <= rule["chance"]:
-                        piece.upgrade = rule["next"]
-                        add_log(game, f"Успех. {piece.name} теперь +{piece.upgrade}.")
-                    else:
-                        add_log(game, f"Неудача. {piece.name} осталось на +{piece.upgrade}.")
-                upgraded = True
-                break
-        if not upgraded:
-            add_log(game, "Сначала экипируй голову/торс/штаны/руки.")
+    elif data.startswith("upgrade_armor_slot:") and game.player:
+        slot = data.split(":", 1)[1]
+        piece = current_armor_piece(game.player, slot)
+        if piece is None:
+            add_log(game, f"Сначала экипируй {ARMOR_SLOT_NAMES[slot].lower()}.")
+        elif slot == "boots":
+            add_log(game, "Тапки точатся только таликами грации.")
+        elif game.player.talics_protection <= 0:
+            add_log(game, "Нет талика покровительства.")
+        elif piece.upgrade >= 7:
+            add_log(game, f"{piece.name} уже +7.")
+        else:
+            rule = UPGRADE_CHANCES[piece.upgrade]
+            game.player.talics_protection -= 1
+            if random.randint(1, 100) <= rule["chance"]:
+                piece.upgrade = rule["next"]
+                add_log(game, f"Успех. {piece.name} теперь +{piece.upgrade}.")
+            else:
+                add_log(game, f"Неудача. {piece.name} осталось на +{piece.upgrade}.")
 
     elif data == "upgrade_boots_grace" and game.player:
         boots = current_armor_piece(game.player, "boots")
         if boots is None:
             add_log(game, "Сначала экипируй тапки.")
         elif game.player.talics_grace <= 0:
-            add_log(game, "У тебя нет талика грации.")
+            add_log(game, "Нет талика грации.")
         elif boots.upgrade >= 7:
-            add_log(game, "Тапки уже заточены на максимум +7.")
+            add_log(game, "Тапки уже +7.")
         else:
             rule = UPGRADE_CHANCES[boots.upgrade]
             game.player.talics_grace -= 1
@@ -980,21 +993,27 @@ def build_application() -> Application:
 
 
 def _run_self_checks() -> None:
-    assert exp_needed_for_next(1) == 120
-    assert mob_exp(1) == 4
-    assert mob_exp(10) > mob_exp(5)
+    assert len(LOCATION_MONSTERS["alliance_outpost"]) == 20
+    assert LOCATION_MONSTERS["haram_colony"][0]["name"] == "Гиперморф"
+    assert get_zone("volcano")["name"] == "Вулкан"
     assert DODGE_UPGRADES[7] == 60
-    p = Player("Беллато", "Штурмовик", 1, 0, 100, 100, 10, 5, 10, 0, 0, 1)
+    assert exp_needed_for_next(2) > exp_needed_for_next(1)
+
+    player = Player("Беллато", "Штурмовик", 1, 0, 100, 100, 10, 5, 10, 0, 0, 1)
     boots = Gear("b1", "Test Boots", "boots", 5, "normal", "обычный", 3, 4)
-    p.armor_inventory.append(boots)
-    p.equipped_armor["boots"] = 0
-    assert current_dodge(p) == 20
-    crafted = make_gear("weapon", 10, False)
-    assert crafted.slot == "weapon"
-    assert salvage_reward(crafted) > 0
-    monsters = selected_monsters_for_zone("alliance_outpost")
-    assert monsters[0]["name"] == "Флем Детеныш"
-    assert len(paged_items(monsters, 0)) == 5
+    player.armor_inventory.append(boots)
+    player.equipped_armor["boots"] = 0
+    assert current_dodge(player) == 20
+
+    elite = generate_enemy("haram_colony", {"name": "Создатель Убийц Альфа (А)", "level": 40, "elite": True, "boss": None})
+    assert elite["hp"] > 4000
+    assert elite["attack"] > 100
+    assert elite["exp"] >= mob_exp(40, True)
+
+    empty_game = GameState()
+    rendered = render_text(empty_game)
+    assert "RF Online: Text Raid" in rendered
+    assert "Выбери расу и класс" in rendered
 
 
 def main() -> None:
