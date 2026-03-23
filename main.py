@@ -419,8 +419,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             add_log(game, "Банка выброшена. Цена продажи: 0.")
         else:
             add_log(game, "У тебя нет лишней банки.")
-        else:
-            add_log(game, "У тебя нет лишней банки.")
 
     elif data == "sell_components_pack" and game.player:
         if game.player.components >= 5:
