@@ -1,8 +1,9 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import ARMOR_SLOT_NAMES, ARMOR_SLOTS, ITEMS_PER_PAGE, MAX_LEVEL
+from data import CLASSES, MARKET_PRICES, RACES, ZONES
 from enemies import selected_monsters_for_zone
-from stats import current_dodge, set_bonus, total_attack, total_armor, exp_needed_for_next
+from stats import current_dodge, exp_needed_for_next, set_bonus, total_armor, total_attack
 from utils import cooldown_left, esc, paged_items
 
 
@@ -14,6 +15,8 @@ def render_text(game) -> str:
     else:
         p = game.player
         set_info = set_bonus(p)
+        buff_line = "Бафф ядра активен\n" if p.weapon_upgrade_buff_active else ""
+
         lines.append(
             f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
             f"HP: {p.hp}/{p.max_hp}\n"
@@ -21,6 +24,8 @@ def render_text(game) -> str:
             f"Крит: {p.crit}% | Уворот: {current_dodge(p)}%\n"
             f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components}\n"
             f"Талики: Н {p.talics_ignorance} / П {p.talics_protection} / Г {p.talics_grace}\n"
+            f"Супер-дропы: Контейнеры {p.ancient_containers} / Ядра {p.enhancement_cores} / Абсолют {p.absolute_talics}\n"
+            f"{buff_line}"
             f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}\n"
             f"Бонус набора: ATK +{set_info['attack']}, ARM +{set_info['armor']}"
         )
@@ -47,6 +52,14 @@ def render_text(game) -> str:
             f"Дроп: {esc(', '.join(game.enemy['drops']))}"
         )
 
+    if game.stage == "market" and game.player:
+        lines.append(
+            "<b>Рынок:</b>\n"
+            f"Банка: купить {MARKET_PRICES['buy_bank']}, продать {MARKET_PRICES['sell_bank']}\n"
+            f"5 компонентов: купить {MARKET_PRICES['buy_components_pack']}, продать {MARKET_PRICES['sell_components_pack']}\n"
+            f"Случайное оружие: {MARKET_PRICES['buy_random_weapon']}"
+        )
+
     if cooldown_left(game) > 0:
         lines.append(f"<b>Откат после смерти:</b> {cooldown_left(game)} сек.")
 
@@ -58,8 +71,6 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
     rows = []
 
     if not game.player:
-        from data import RACES, CLASSES
-
         rows.append(
             [InlineKeyboardButton(r["name"], callback_data=f"race:{r['id']}") for r in RACES]
         )
@@ -70,8 +81,6 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "hub":
-        from data import ZONES
-
         zone_buttons = [InlineKeyboardButton(z["name"], callback_data=f"zone:{z['id']}") for z in ZONES]
         for i in range(0, len(zone_buttons), 2):
             rows.append(zone_buttons[i:i + 2])
@@ -82,6 +91,7 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Снаряжение", callback_data="equipment"),
             ]
         )
+        rows.append([InlineKeyboardButton("Рынок", callback_data="market")])
         rows.append(
             [
                 InlineKeyboardButton("Крафт оружия", callback_data="craft_weapon"),
@@ -124,6 +134,57 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
             ]
         )
         rows.append([InlineKeyboardButton("Сменить монстра", callback_data="back_zone_select")])
+        return InlineKeyboardMarkup(rows)
+
+    if game.stage == "market":
+        rows.append(
+            [
+                InlineKeyboardButton(f"Купить банку ({MARKET_PRICES['buy_bank']})", callback_data="buy_bank"),
+                InlineKeyboardButton("Купить 5 комп. (25)", callback_data="buy_components_pack"),
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(f"Случайное оружие ({MARKET_PRICES['buy_random_weapon']})", callback_data="buy_random_weapon"),
+                InlineKeyboardButton("Открыть контейнер", callback_data="open_container"),
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton("Продать 1 банку", callback_data="sell_bank"),
+                InlineKeyboardButton("Продать 5 комп.", callback_data="sell_components_pack"),
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton("Ядро → буст оружия", callback_data="use_enhancement_core"),
+                InlineKeyboardButton("Абсолют +1 оружию", callback_data="use_absolute_talic"),
+            ]
+        )
+
+        weapon_items = paged_items(
+            game.player.weapon_inventory,
+            game.market_weapon_page,
+            ITEMS_PER_PAGE,
+        )
+        for gear in weapon_items:
+            idx = game.player.weapon_inventory.index(gear)
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"Продать {gear.name} +{gear.upgrade}",
+                        callback_data=f"sell_weapon:{idx}",
+                    )
+                ]
+            )
+
+        rows.append(
+            [
+                InlineKeyboardButton("◀️ Продажа", callback_data="market_weapon_prev"),
+                InlineKeyboardButton("Продажа ▶️", callback_data="market_weapon_next"),
+            ]
+        )
+        rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "equipment":
