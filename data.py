@@ -58,7 +58,7 @@ ZONES = [
         "id": "alliance_outpost",
         "name": "Аванпост Альянса",
         "text": "Стартовая территория с мобами 1-20 уровня.",
-        "loot": ["необработанная руда", "банка HP", "Talic Fragment"],
+        "loot": ["Редкая Руда", "банка HP", "Компонент"],
         "bosses": [
             {
                 "name": "Командир Аванпоста",
@@ -78,7 +78,7 @@ ZONES = [
         "id": "haram_colony",
         "name": "Колония Харам",
         "text": "Болотная локация с мобами 21-40 уровня.",
-        "loot": ["Blue Ore", "банка HP", "Talic Crystal", "анимус-чип"],
+        "loot": ["Редкая Руда", "банка HP", "Компонент"],
         "bosses": [
             {
                 "name": "Хранитель Харам",
@@ -98,8 +98,18 @@ ZONES = [
         "id": "volcano",
         "name": "Вулкан",
         "text": "Огненная локация с мобами 40-47 уровня.",
-        "loot": ["Red Ore", "банка HP", "Talic Crystal", "Intense Part"],
+        "loot": ["Редкая Руда", "банка HP", "Компонент"],
         "bosses": [
+            {
+                "name": "Гора Руды",
+                "level": 1,
+                "hp": 1000,
+                "attack": 1,
+                "reward_min": 5,
+                "reward_max": 10,
+                "exp": 10,
+                "boss": False,
+            },
             {
                 "name": "Властитель Вулкана",
                 "level": 47,
@@ -118,7 +128,7 @@ ZONES = [
         "id": "krag_mines",
         "name": "Краговые Шахты",
         "text": "Эндгейм зона с топовым дропом.",
-        "loot": ["Golden Ore", "банка HP", "Rare Box", "Leon Fragment"],
+        "loot": ["Редкая Руда", "банка HP", "Rare Box", "Leon Fragment"],
         "bosses": [
             {
                 "name": "Король Шахт",
