@@ -36,6 +36,7 @@ class Player:
     loot_count: int = 0
     clears: int = 0
     components: int = 0
+    rare_ore: int = 0
     ancient_containers: int = 0
     enhancement_cores: int = 0
     absolute_talics: int = 0
@@ -62,6 +63,7 @@ class GameState:
     dead_until_ts: Optional[int] = None
     equipment_page_weapon: int = 0
     market_weapon_page: int = 0
+    salvage_page: int = 0
     equipment_page_armor: Dict[str, int] = field(
         default_factory=lambda: {slot: 0 for slot in ARMOR_SLOTS}
     )
