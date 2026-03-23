@@ -46,10 +46,19 @@ LOCATION_MONSTERS = {
         {"name": "Гигансткий Орк (А)", "level": 46, "elite": True},
         {"name": "Красный Псевдодракон", "level": 47},
     ],
-    "krag_mines": [
+        "krag_mines": [
         {"name": "Шахтный Разоритель", "level": 48},
         {"name": "Глубинный Крушитель", "level": 49},
         {"name": "Пещерный Тиран", "level": 50},
+        {
+            "name": "Гора Руды",
+            "level": 50,
+            "hp": 1000,
+            "attack": 1,
+            "reward_min": 5,
+            "reward_max": 10,
+            "exp": 10,
+        },
     ],
 }
 
