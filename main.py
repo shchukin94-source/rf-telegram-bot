@@ -45,7 +45,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
+TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
 USER_GAMES = load_games()
 
 
@@ -61,6 +61,34 @@ def get_game(user_id: int) -> GameState:
     if user_id not in USER_GAMES:
         USER_GAMES[user_id] = GameState()
     return USER_GAMES[user_id]
+
+
+def build_leaderboard_text() -> str:
+    players = []
+    for _, game in USER_GAMES.items():
+        if not game.player:
+            continue
+        p = game.player
+        players.append(
+            {
+                "name": f"{p.race_name}/{p.class_name}",
+                "level": p.level,
+                "atk": total_attack(p),
+                "def": total_armor(p),
+            }
+        )
+
+    players.sort(key=lambda x: (-x["level"], -x["atk"], -x["def"]))
+
+    if not players:
+        return "Пока нет игроков."
+
+    lines = []
+    for i, p in enumerate(players[:20], start=1):
+        lines.append(
+            f"{i}. {p['name']} | lvl {p['level']} | ATK {p['atk']} | DEF {p['def']}"
+        )
+    return "\n".join(lines)
 
 
 async def send_or_edit(update: Update, text: str) -> None:
@@ -196,6 +224,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             game.enemy = generate_enemy(game.current_zone_id, monsters[idx])
             game.stage = "combat"
             add_log(game, f"Цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+            if game.enemy.get("legendary"):
+                add_log(game, "👑 Появился легендарный моб!")
 
     elif data == "attack" and game.player and game.enemy:
         crit = random_roll_percent(game.player.crit)
@@ -252,7 +282,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         add_log(game, "Доп. дроп: талик грации.")
                         break
 
-            # Особый моб: Гора Руды
             if game.enemy["name"] == "Гора Руды":
                 if random_roll_percent(15):
                     game.player.rare_ore += 1
@@ -270,7 +299,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         game.player.talics_grace += 1
                         add_log(game, "💨 Выпал талик грации (Гора Руды).")
 
-            # Общий шанс редкой руды со всех монстров
             if random_roll_percent(15):
                 game.player.rare_ore += 1
                 add_log(game, "Выпала Редкая Руда.")
@@ -289,6 +317,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     add_log(game, f"Выпала броня: {gear.name} +0.")
 
             super_mult = 10 if game.enemy.get("elite") else (5 if game.enemy["is_boss"] else 1)
+            if game.enemy.get("legendary"):
+                super_mult = max(super_mult, 7)
 
             if random.randint(1, 1000) <= SUPER_DROP_CHANCES["ancient_container"] * super_mult:
                 game.player.ancient_containers += 1
@@ -309,6 +339,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if 0 <= game.selected_monster_index < len(monsters):
                     game.enemy = generate_enemy(game.current_zone_id, monsters[game.selected_monster_index])
                     add_log(game, f"Следующая цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+                    if game.enemy.get("legendary"):
+                        add_log(game, "👑 Появился легендарный моб!")
                 else:
                     game.enemy = None
                     game.stage = "zone_select"
@@ -450,6 +482,11 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif data == "market" and game.player:
         game.stage = "market"
+
+    elif data == "leaderboard":
+        game.stage = "leaderboard"
+        game.leaderboard_text = build_leaderboard_text()
+        add_log(game, "Открыт leaderboard.")
 
     elif data == "salvage_menu" and game.player:
         game.stage = "salvage"
