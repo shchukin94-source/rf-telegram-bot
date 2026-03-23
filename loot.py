@@ -62,3 +62,57 @@ def try_upgrade(current_upgrade: int) -> tuple[bool, int]:
     if success:
         return True, rule["next"]
     return False, current_upgrade
+
+
+def open_ancient_container(player):
+    roll = random.randint(1, 1000)
+
+    if roll <= 10:
+        # 1% — леон
+        gear = make_gear("weapon", max(1, player.level), True)
+        gear.tier_id = "leon"
+        gear.tier_name = "леон"
+        gear.name = f"{gear.name.split(' [')[0]} [леон] lv.{gear.level}"
+        return gear, "🔥 Супер-дроп: леон оружие из древнего контейнера."
+
+    if roll <= 60:
+        # 5% — type c
+        slot = random.choice(["weapon"] + ARMOR_SLOTS)
+        gear = make_gear(slot, max(1, player.level), True)
+        gear.tier_id = "type_c"
+        gear.tier_name = "тип с"
+        gear.name = f"{gear.name.split(' [')[0]} [тип с] lv.{gear.level}"
+        return gear, "✨ Редкий дроп: предмет тип с из древнего контейнера."
+
+    if roll <= 200:
+        # 14% — инт
+        slot = random.choice(["weapon"] + ARMOR_SLOTS)
+        gear = make_gear(slot, max(1, player.level), False)
+        gear.tier_id = "int"
+        gear.tier_name = "инт"
+        gear.name = f"{gear.name.split(' [')[0]} [инт] lv.{gear.level}"
+        return gear, "✨ Редкий дроп: инт предмет из древнего контейнера."
+
+    # остальное — обычный предмет
+    slot = random.choice(["weapon"] + ARMOR_SLOTS)
+    gear = make_gear(slot, max(1, player.level), False)
+    return gear, "Контейнер открыт: обычный предмет."
+
+
+def sell_weapon_from_inventory(player, idx: int) -> int:
+    if not (0 <= idx < len(player.weapon_inventory)):
+        return 0
+
+    gear = player.weapon_inventory[idx]
+    value = max(15, gear.level * 6 + gear.base_stat * 3 + gear.upgrade * 25)
+
+    del player.weapon_inventory[idx]
+
+    if player.equipped_weapon_index is not None:
+        if player.equipped_weapon_index == idx:
+            player.equipped_weapon_index = None
+        elif player.equipped_weapon_index > idx:
+            player.equipped_weapon_index -= 1
+
+    player.dizens += value
+    return value
