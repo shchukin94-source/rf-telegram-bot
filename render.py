@@ -20,8 +20,6 @@ def render_text(game) -> str:
 
     if not game.player:
         lines.append("Выбери расу и класс, затем начни кампанию.")
-    if game.stage == "leaderboard" and hasattr(game, "leaderboard_text"):
-        lines.append(f"<b>Leaderboard:</b>\n{esc(game.leaderboard_text)}")
         lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
         return "\n\n".join(lines)
 
@@ -91,7 +89,7 @@ def render_text(game) -> str:
             f"Банка: купить {MARKET_PRICES['buy_bank']}, продать {MARKET_PRICES['sell_bank']}\n"
             f"5 компонентов: купить {MARKET_PRICES['buy_components_pack']}, продать {MARKET_PRICES['sell_components_pack']}\n"
             f"Случайное оружие: {MARKET_PRICES['buy_random_weapon']}\n"
-            f"30 Редкая Руда → 1 Контейнер"
+            "30 Редкая Руда -> 1 Контейнер"
         )
 
     if game.stage == "salvage":
@@ -113,6 +111,9 @@ def render_text(game) -> str:
             f"<b>Разборка:</b> стр. {game.salvage_page + 1}\n"
             f"{esc(salvage_text or 'Нет предметов для разборки')}"
         )
+
+    if game.stage == "leaderboard" and hasattr(game, "leaderboard_text"):
+        lines.append(f"<b>Leaderboard:</b>\n{esc(game.leaderboard_text)}")
 
     if cooldown_left(game) > 0:
         lines.append(f"<b>Откат после смерти:</b> {cooldown_left(game)} сек.")
@@ -244,11 +245,7 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Продажа ▶️", callback_data="market_weapon_next"),
             ]
         )
-
-    if game.stage == "leaderboard":
-        rows.append([InlineKeyboardButton("Обновить", callback_data="leaderboard")])
         rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
-        return InlineKeyboardMarkup(rows)        rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "salvage":
@@ -259,8 +256,8 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
             all_items.append(("armor", i, gear))
 
         page_items = paged_items(all_items, game.salvage_page, ITEMS_PER_PAGE)
-        for _, idx, gear in page_items:
-            if gear.slot == "weapon":
+        for item_type, idx, gear in page_items:
+            if item_type == "weapon":
                 rows.append([InlineKeyboardButton(f"Разобрать {gear.name} +{gear.upgrade}", callback_data=f"salvage_weapon_pick:{idx}")])
             else:
                 rows.append([InlineKeyboardButton(f"Разобрать {gear.name} +{gear.upgrade}", callback_data=f"salvage_armor_pick:{idx}")])
@@ -272,6 +269,11 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
             ]
         )
         rows.append([InlineKeyboardButton("Назад в снаряжение", callback_data="equipment")])
+        return InlineKeyboardMarkup(rows)
+
+    if game.stage == "leaderboard":
+        rows.append([InlineKeyboardButton("Обновить", callback_data="leaderboard")])
+        rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "equipment":
