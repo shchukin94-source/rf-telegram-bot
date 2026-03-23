@@ -227,8 +227,8 @@ CRAFT_RECIPES = {
 MARKET_PRICES = {
     "buy_bank": 20,
     "buy_components_pack": 25,      # +5 компонентов
-    "buy_random_weapon": 120,
-    "sell_bank": 8,
+    "buy_random_weapon": 300,
+    "sell_bank": 0,
     "sell_components_pack": 15,     # -5 компонентов
 }
 
