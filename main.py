@@ -304,15 +304,15 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         game.player.clears += 1
                         add_log(game, f"Победа. +{dizens_gain} дизен, +{exp_gain} exp, дроп: {loot}.")
 
-            if loot == "талик невежества":
+            if loot == "Талика Невежества":
                 game.player.talics_ignorance += 1
-                add_log(game, "Получен талик невежества.")
-            elif loot == "талик покровительства":
+                add_log(game, "Получена Талика Невежества.")
+            elif loot == "Талика Покровительства":
                 game.player.talics_protection += 1
-                add_log(game, "Получен талик покровительства.")
-            elif loot == "талик грации":
+                add_log(game, "Получена Талика Покровительства.")
+            elif loot == "Талика Грации":
                 game.player.talics_grace += 1
-                add_log(game, "Получен талик грации.")
+                add_log(game, "Получена Талика Грации.")
             elif loot == "Компонент":
                 game.player.components += 1
                 add_log(game, "Получен Компонент.")
