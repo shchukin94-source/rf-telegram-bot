@@ -686,7 +686,7 @@ def _run_self_checks() -> None:
 def main() -> None:
     _run_self_checks()
 
-    if TOKEN == "PUT_YOUR_BOT_TOKEN_HERE":
+    if TOKEN == "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8":
         raise RuntimeError("Set BOT_TOKEN environment variable or replace PUT_YOUR_BOT_TOKEN_HERE in the file.")
 
     app = Application.builder().token(TOKEN).build()
