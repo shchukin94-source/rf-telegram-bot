@@ -19,7 +19,7 @@ from data import CLASSES, MARKET_PRICES, RACES, SUPER_DROP_CHANCES
 from enemies import generate_enemy, get_zone, selected_monsters_for_zone
 from loot import (
     craft_item,
-    make_gear,
+    make_market_weapon,
     maybe_gear_drop,
     open_ancient_container,
     salvage_reward,
@@ -407,7 +407,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         price = MARKET_PRICES["buy_random_weapon"]
         if game.player.dizens >= price:
             game.player.dizens -= price
-            gear = make_gear("weapon", max(1, game.player.level), False)
+            gear = make_market_weapon(game.player)
             game.player.weapon_inventory.append(gear)
             add_log(game, f"Куплено случайное оружие: {gear.name}.")
         else:
