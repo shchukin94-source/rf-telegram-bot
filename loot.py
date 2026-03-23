@@ -42,6 +42,27 @@ def maybe_gear_drop(enemy_level: int, is_boss: bool, elite: bool = False) -> Opt
     slot = random.choice(["weapon"] + ARMOR_SLOTS)
     return make_gear(slot, enemy_level, is_boss or elite)
 
+
+def salvage_reward(gear: Gear) -> int:
+    return max(1, gear.level)
+
+
+def craft_item(player, slot: str, level: int) -> Optional[Gear]:
+    cost = level * 10
+    if player.components < cost:
+        return None
+    player.components -= cost
+    return make_gear(slot, level, False)
+
+
+def try_upgrade(current_upgrade: int) -> tuple[bool, int]:
+    rule = UPGRADE_CHANCES[current_upgrade]
+    success = random.randint(1, 100) <= rule["chance"]
+    if success:
+        return True, rule["next"]
+    return False, current_upgrade
+
+
 def make_container_relic(slot: str, level: int) -> Gear:
     base = max(1, level)
     if slot == "weapon":
@@ -59,36 +80,16 @@ def make_container_relic(slot: str, level: int) -> Gear:
         base_stat=stat,
     )
 
-def salvage_reward(gear: Gear) -> int:
-    return max(1, gear.level)
-
-
-def craft_item(player, slot: str, level: int) -> Optional[Gear]:
-    cost = level * 10
-    if player.components < cost:
-        return None
-    player.components -= cost
-    return make_gear(slot, level, False)
-
-def try_upgrade(current_upgrade: int) -> tuple[bool, int]:
-    rule = UPGRADE_CHANCES[current_upgrade]
-    success = random.randint(1, 100) <= rule["chance"]
-    if success:
-        return True, rule["next"]
-    return False, current_upgrade
-
 
 def open_ancient_container(player):
     roll = random.randint(1, 1000)
 
     if roll <= 25:
-        # 2.5% — контейнерный реликтовый сет
         slot = random.choice(["weapon"] + ARMOR_SLOTS)
         gear = make_container_relic(slot, max(1, player.level))
         return gear, "🌟 Супер-дроп: предмет реликтового контейнерного сета."
 
     if roll <= 35:
-        # 1% — леон
         gear = make_gear("weapon", max(1, player.level), True)
         gear.tier_id = "leon"
         gear.tier_name = "леон"
@@ -96,7 +97,6 @@ def open_ancient_container(player):
         return gear, "🔥 Супер-дроп: леон оружие из древнего контейнера."
 
     if roll <= 85:
-        # 5% — type c
         slot = random.choice(["weapon"] + ARMOR_SLOTS)
         gear = make_gear(slot, max(1, player.level), True)
         gear.tier_id = "type_c"
@@ -105,7 +105,6 @@ def open_ancient_container(player):
         return gear, "✨ Редкий дроп: предмет тип с из древнего контейнера."
 
     if roll <= 225:
-        # 14% — инт
         slot = random.choice(["weapon"] + ARMOR_SLOTS)
         gear = make_gear(slot, max(1, player.level), False)
         gear.tier_id = "int"
@@ -116,6 +115,7 @@ def open_ancient_container(player):
     slot = random.choice(["weapon"] + ARMOR_SLOTS)
     gear = make_gear(slot, max(1, player.level), False)
     return gear, "Контейнер открыт: обычный предмет."
+
 
 def sell_weapon_from_inventory(player, idx: int) -> int:
     if not (0 <= idx < len(player.weapon_inventory)):
@@ -134,3 +134,10 @@ def sell_weapon_from_inventory(player, idx: int) -> int:
 
     player.dizens += value
     return value
+
+
+def make_market_weapon(player) -> Gear:
+    min_level = max(1, player.level - 5)
+    max_level = max(1, player.level + 5)
+    weapon_level = random.randint(min_level, max_level)
+    return make_gear("weapon", weapon_level, False)
