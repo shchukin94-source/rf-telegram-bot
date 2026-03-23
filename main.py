@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
 USER_GAMES = load_games()
-MAX_BANKS = 25
+MAX_BANKS = 20
 USER_LOCKS = defaultdict(asyncio.Lock)
 LAST_ACTION_TS = {}
 SAVE_TASK: asyncio.Task | None = None
@@ -435,9 +435,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 elif data == "rest" and game.player:
                     game.player.hp = game.player.max_hp
                     old_banks = game.player.banks
-                    game.player.banks = min(MAX_BANKS, game.player.banks + 1)
+                    game.player.banks = min(MAX_BANKS, game.player.banks + 3)
                     if game.player.banks > old_banks:
-                        add_log(game, "На базе ты восстановил здоровье и получил 1 банку.")
+                        add_log(game, "На базе ты восстановил здоровье и получил 3 банки.")
                     else:
                         add_log(game, f"На базе ты восстановил здоровье. Лимит банок: {MAX_BANKS}.")
 
