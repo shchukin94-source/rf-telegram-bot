@@ -40,7 +40,7 @@ def load_games() -> Dict[int, GameState]:
             if not player.equipped_armor:
                 player.equipped_armor = {slot: None for slot in ARMOR_SLOTS}
 
-               user_games[int(uid)] = GameState(
+        user_games[int(uid)] = GameState(
             stage=game_data.get("stage", "menu"),
             selected_race=game_data.get("selected_race"),
             selected_class=game_data.get("selected_class"),
