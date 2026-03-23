@@ -3,7 +3,15 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from config import ARMOR_SLOT_NAMES, ARMOR_SLOTS, ITEMS_PER_PAGE, MAX_LEVEL
 from data import CLASSES, MARKET_PRICES, RACES, ZONES
 from enemies import selected_monsters_for_zone
-from stats import current_dodge, exp_needed_for_next, set_bonus, total_armor, total_attack
+from stats import (
+    current_armor_piece,
+    current_dodge,
+    current_weapon,
+    exp_needed_for_next,
+    set_bonus,
+    total_armor,
+    total_attack,
+)
 from utils import cooldown_left, esc, paged_items
 
 
@@ -12,22 +20,45 @@ def render_text(game) -> str:
 
     if not game.player:
         lines.append("Выбери расу и класс, затем начни кампанию.")
+        lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
+        return "\n\n".join(lines)
+
+    p = game.player
+    set_info = set_bonus(p)
+
+    if game.stage == "combat":
+        lines.append(
+            f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
+            f"HP: {p.hp}/{p.max_hp}\n"
+            f"ATK: {total_attack(p)} | DEF: {total_armor(p)}\n"
+            f"Крит: {p.crit}% | Уворот: {current_dodge(p)}%\n"
+            f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components}\n"
+            f"Талики: Невежества {p.talics_ignorance} / Покровительства {p.talics_protection} / Грации {p.talics_grace}\n"
+            f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}"
+        )
     else:
-        p = game.player
-        set_info = set_bonus(p)
+        weapon = current_weapon(p)
+        armor_lines = []
+        for slot in ARMOR_SLOTS:
+            piece = current_armor_piece(p, slot)
+            piece_name = f"{piece.name} +{piece.upgrade}" if piece else "нет"
+            armor_lines.append(f"{ARMOR_SLOT_NAMES[slot]}: {piece_name}")
+
         buff_line = "Бафф ядра активен\n" if p.weapon_upgrade_buff_active else ""
 
         lines.append(
             f"<b>{esc(p.race_name)} / {esc(p.class_name)}</b> | lvl {p.level}/{MAX_LEVEL}\n"
             f"HP: {p.hp}/{p.max_hp}\n"
-            f"ATK: {total_attack(p)} | ARM: {total_armor(p)}\n"
+            f"ATK: {total_attack(p)} | DEF: {total_armor(p)}\n"
             f"Крит: {p.crit}% | Уворот: {current_dodge(p)}%\n"
-            f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components}\n"
-            f"Талики: Н {p.talics_ignorance} / П {p.talics_protection} / Г {p.talics_grace}\n"
+            f"Дизены: {p.dizens} | Банки: {p.banks} | Компоненты: {p.components} | Редкая Руда: {p.rare_ore}\n"
+            f"Талики: Невежества {p.talics_ignorance} / Покровительства {p.talics_protection} / Грации {p.talics_grace}\n"
             f"Супер-дропы: Контейнеры {p.ancient_containers} / Ядра {p.enhancement_cores} / Абсолют {p.absolute_talics}\n"
             f"{buff_line}"
+            f"Оружие: {esc(f'{weapon.name} +{weapon.upgrade}' if weapon else 'нет')}\n"
+            f"{esc(chr(10).join(armor_lines))}\n"
             f"Опыт: {p.exp}/{exp_needed_for_next(p.level) if p.level < MAX_LEVEL else 'MAX'}\n"
-            f"Бонус набора: ATK +{set_info['attack']}, ARM +{set_info['armor']}"
+            f"Бонус набора: ATK +{set_info['attack']}, DEF +{set_info['armor']}"
         )
 
     if game.current_zone_id and game.stage == "zone_select":
@@ -52,12 +83,33 @@ def render_text(game) -> str:
             f"Дроп: {esc(', '.join(game.enemy['drops']))}"
         )
 
-    if game.stage == "market" and game.player:
+    if game.stage == "market":
         lines.append(
             "<b>Рынок:</b>\n"
             f"Банка: купить {MARKET_PRICES['buy_bank']}, продать {MARKET_PRICES['sell_bank']}\n"
             f"5 компонентов: купить {MARKET_PRICES['buy_components_pack']}, продать {MARKET_PRICES['sell_components_pack']}\n"
-            f"Случайное оружие: {MARKET_PRICES['buy_random_weapon']}"
+            f"Случайное оружие: {MARKET_PRICES['buy_random_weapon']}\n"
+            f"30 Редкая Руда → 1 Контейнер"
+        )
+
+    if game.stage == "salvage":
+        all_items = []
+        for i, gear in enumerate(p.weapon_inventory):
+            all_items.append(("weapon", i, gear))
+        for i, gear in enumerate(p.armor_inventory):
+            all_items.append(("armor", i, gear))
+
+        page_items = paged_items(all_items, game.salvage_page, ITEMS_PER_PAGE)
+        salvage_text = "\n".join(
+            f"{idx + 1}. {gear.name} +{gear.upgrade} -> {gear.level} комп."
+            for idx, (_, _, gear) in enumerate(
+                page_items,
+                start=game.salvage_page * ITEMS_PER_PAGE,
+            )
+        )
+        lines.append(
+            f"<b>Разборка:</b> стр. {game.salvage_page + 1}\n"
+            f"{esc(salvage_text or 'Нет предметов для разборки')}"
         )
 
     if cooldown_left(game) > 0:
@@ -157,7 +209,12 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
         )
         rows.append(
             [
-                InlineKeyboardButton("Ядро → буст оружия", callback_data="use_enhancement_core"),
+                InlineKeyboardButton("30 Редкая Руда -> Контейнер", callback_data="exchange_rare_ore"),
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton("Ядро -> буст оружия", callback_data="use_enhancement_core"),
                 InlineKeyboardButton("Абсолют +1 оружию", callback_data="use_absolute_talic"),
             ]
         )
@@ -185,6 +242,29 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
             ]
         )
         rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
+        return InlineKeyboardMarkup(rows)
+
+    if game.stage == "salvage":
+        all_items = []
+        for i, gear in enumerate(game.player.weapon_inventory):
+            all_items.append(("weapon", i, gear))
+        for i, gear in enumerate(game.player.armor_inventory):
+            all_items.append(("armor", i, gear))
+
+        page_items = paged_items(all_items, game.salvage_page, ITEMS_PER_PAGE)
+        for _, idx, gear in page_items:
+            if gear.slot == "weapon":
+                rows.append([InlineKeyboardButton(f"Разобрать {gear.name} +{gear.upgrade}", callback_data=f"salvage_weapon_pick:{idx}")])
+            else:
+                rows.append([InlineKeyboardButton(f"Разобрать {gear.name} +{gear.upgrade}", callback_data=f"salvage_armor_pick:{idx}")])
+
+        rows.append(
+            [
+                InlineKeyboardButton("◀️", callback_data="salvage_prev"),
+                InlineKeyboardButton("▶️", callback_data="salvage_next"),
+            ]
+        )
+        rows.append([InlineKeyboardButton("Назад в снаряжение", callback_data="equipment")])
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "equipment":
@@ -253,12 +333,7 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Точить тапки грацией", callback_data="upgrade_boots_grace"),
             ]
         )
-        rows.append(
-            [
-                InlineKeyboardButton("Разобрать оружие", callback_data="salvage_weapon"),
-                InlineKeyboardButton("Разобрать броню", callback_data="salvage_armor"),
-            ]
-        )
+        rows.append([InlineKeyboardButton("Разобрать предмет", callback_data="salvage_menu")])
         rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
 
