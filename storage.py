@@ -53,6 +53,7 @@ def load_games() -> Dict[int, GameState]:
             dead_until_ts=game_data.get("dead_until_ts"),
             equipment_page_weapon=game_data.get("equipment_page_weapon", 0),
             market_weapon_page=game_data.get("market_weapon_page", 0),
+            salvage_page=game_data.get("salvage_page", 0),
             equipment_page_armor=game_data.get(
                 "equipment_page_armor",
                 {slot: 0 for slot in ARMOR_SLOTS},
