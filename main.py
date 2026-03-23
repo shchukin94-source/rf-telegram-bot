@@ -222,6 +222,15 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 game.player.talics_protection += 1
             elif loot == "талик грации":
                 game.player.talics_grace += 1
+            elif loot == "Компонент":
+                game.player.components += 1
+                add_log(game, "Получен Компонент.")
+            elif loot == "Редкая Руда":
+                game.player.rare_ore += 1
+                add_log(game, "Получена Редкая Руда.")
+            elif loot == "банка HP":
+                game.player.banks += 1
+                add_log(game, "Получена Банка.")
             else:
                 extra_rolls = 10 if game.enemy.get("elite") else 1
 
@@ -243,6 +252,25 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         add_log(game, "Доп. дроп: талик грации.")
                         break
 
+            # Особый моб: Гора Руды
+            if game.enemy["name"] == "Гора Руды":
+                if random_roll_percent(15):
+                    game.player.rare_ore += 1
+                    add_log(game, "⛏ Выпала Редкая Руда (Гора Руды).")
+
+                if random_roll_percent(15):
+                    talic_type = random_choice(["ignorance", "protection", "grace"])
+                    if talic_type == "ignorance":
+                        game.player.talics_ignorance += 1
+                        add_log(game, "💠 Выпал талик невежества (Гора Руды).")
+                    elif talic_type == "protection":
+                        game.player.talics_protection += 1
+                        add_log(game, "🛡 Выпал талик покровительства (Гора Руды).")
+                    else:
+                        game.player.talics_grace += 1
+                        add_log(game, "💨 Выпал талик грации (Гора Руды).")
+
+            # Общий шанс редкой руды со всех монстров
             if random_roll_percent(15):
                 game.player.rare_ore += 1
                 add_log(game, "Выпала Редкая Руда.")
@@ -278,8 +306,12 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             if game.selected_monster_index is not None and game.current_zone_id:
                 monsters = selected_monsters_for_zone(game.current_zone_id)
-                game.enemy = generate_enemy(game.current_zone_id, monsters[game.selected_monster_index])
-                add_log(game, f"Следующая цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+                if 0 <= game.selected_monster_index < len(monsters):
+                    game.enemy = generate_enemy(game.current_zone_id, monsters[game.selected_monster_index])
+                    add_log(game, f"Следующая цель: {game.enemy['name']} lv.{game.enemy['level']}.")
+                else:
+                    game.enemy = None
+                    game.stage = "zone_select"
             else:
                 game.enemy = None
                 game.stage = "zone_select"
