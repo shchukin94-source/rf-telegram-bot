@@ -252,3 +252,14 @@ SUPER_DROP_CHANCES = {
     "enhancement_core": 5,
     "absolute_talic": 2,
 }
+
+CONTAINER_SET_NAMES = {
+    "head": "Шлем Реликта",
+    "torso": "Броня Реликта",
+    "legs": "Поножи Реликта",
+    "arms": "Перчатки Реликта",
+    "boots": "Ботинки Реликта",
+    "weapon": "Клинок Реликта",
+}
+
+LEGENDARY_MOB_CHANCE = 1  # 1%
