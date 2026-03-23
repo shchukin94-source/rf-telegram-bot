@@ -9,6 +9,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 from config import (
     ARMOR_SLOTS,
+    ARMOR_SLOT_NAMES,
     DODGE_UPGRADES,
     ITEMS_PER_PAGE,
     UPGRADE_CHANCES,
@@ -44,7 +45,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
+TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
 USER_GAMES = load_games()
 
 
@@ -242,6 +243,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         add_log(game, "Доп. дроп: талик грации.")
                         break
 
+            if random_roll_percent(15):
+                game.player.rare_ore += 1
+                add_log(game, "Выпала Редкая Руда.")
+
             gear = maybe_gear_drop(
                 game.enemy["level"],
                 game.enemy["is_boss"],
@@ -351,6 +356,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             add_log(game, "Не хватает компонентов.")
 
+    elif data == "exchange_rare_ore" and game.player:
+        if game.player.rare_ore >= 30:
+            game.player.rare_ore -= 30
+            game.player.ancient_containers += 1
+            add_log(game, "30 Редкая Руда обменяны на 1 Контейнер.")
+        else:
+            add_log(game, "Не хватает Редкой Руды.")
+
     elif data.startswith("sell_weapon:") and game.player:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.weapon_inventory):
@@ -406,6 +419,47 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif data == "market" and game.player:
         game.stage = "market"
 
+    elif data == "salvage_menu" and game.player:
+        game.stage = "salvage"
+        game.salvage_page = 0
+
+    elif data == "salvage_prev" and game.player:
+        game.salvage_page = max(0, game.salvage_page - 1)
+
+    elif data == "salvage_next" and game.player:
+        total_items = len(game.player.weapon_inventory) + len(game.player.armor_inventory)
+        max_page = max(0, (total_items - 1) // ITEMS_PER_PAGE)
+        game.salvage_page = min(max_page, game.salvage_page + 1)
+
+    elif data.startswith("salvage_weapon_pick:") and game.player:
+        idx = int(data.split(":", 1)[1])
+        if 0 <= idx < len(game.player.weapon_inventory):
+            gear = game.player.weapon_inventory[idx]
+            reward = salvage_reward(gear)
+            del game.player.weapon_inventory[idx]
+            if game.player.equipped_weapon_index is not None:
+                if game.player.equipped_weapon_index == idx:
+                    game.player.equipped_weapon_index = None
+                elif game.player.equipped_weapon_index > idx:
+                    game.player.equipped_weapon_index -= 1
+            game.player.components += reward
+            add_log(game, f"Разобрано оружие {gear.name}. Получено {reward} компонентов.")
+
+    elif data.startswith("salvage_armor_pick:") and game.player:
+        idx = int(data.split(":", 1)[1])
+        if 0 <= idx < len(game.player.armor_inventory):
+            gear = game.player.armor_inventory[idx]
+            reward = salvage_reward(gear)
+            del game.player.armor_inventory[idx]
+            for slot, equipped_idx in list(game.player.equipped_armor.items()):
+                if equipped_idx is not None:
+                    if equipped_idx == idx:
+                        game.player.equipped_armor[slot] = None
+                    elif equipped_idx > idx:
+                        game.player.equipped_armor[slot] = equipped_idx - 1
+            game.player.components += reward
+            add_log(game, f"Разобрана броня {gear.name}. Получено {reward} компонентов.")
+
     elif data.startswith("equip_weapon:") and game.player:
         idx = int(data.split(":", 1)[1])
         if 0 <= idx < len(game.player.weapon_inventory):
@@ -418,7 +472,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if 0 <= idx < len(game.player.armor_inventory):
             chosen = game.player.armor_inventory[idx]
             game.player.equipped_armor[chosen.slot] = idx
-            add_log(game, f"Экипировано: {chosen.name} +{chosen.upgrade}.")
+            add_log(game, f"Экипировано: {ARMOR_SLOT_NAMES[chosen.slot]} {chosen.name} +{chosen.upgrade}.")
 
     elif data == "upgrade_weapon" and game.player:
         gear = current_weapon(game.player)
@@ -448,7 +502,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         slot = data.split(":", 1)[1]
         piece = current_armor_piece(game.player, slot)
         if piece is None:
-            add_log(game, f"Сначала экипируй {slot}.")
+            add_log(game, f"Сначала экипируй {ARMOR_SLOT_NAMES[slot].lower()}.")
         elif slot == "boots":
             add_log(game, "Тапки точатся только таликами грации.")
         elif game.player.talics_protection <= 0:
@@ -481,53 +535,22 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 add_log(game, f"Неудача. {boots.name} осталось на +{boots.upgrade}.")
 
-    elif data == "salvage_weapon" and game.player:
-        gear = current_weapon(game.player)
-        if gear is None:
-            add_log(game, "Сначала экипируй оружие для разборки.")
-        else:
-            reward = salvage_reward(gear)
-            idx = game.player.equipped_weapon_index
-            del game.player.weapon_inventory[idx]
-            game.player.equipped_weapon_index = None
-            game.player.components += reward
-            add_log(game, f"Оружие разобрано на {reward} компонентов.")
-
-    elif data == "salvage_armor" and game.player:
-        salvaged = False
-        for slot in ARMOR_SLOTS:
-            idx = game.player.equipped_armor.get(slot)
-            if idx is not None and 0 <= idx < len(game.player.armor_inventory):
-                gear = game.player.armor_inventory[idx]
-                reward = salvage_reward(gear)
-                del game.player.armor_inventory[idx]
-                game.player.equipped_armor[slot] = None
-                for other_slot, other_idx in list(game.player.equipped_armor.items()):
-                    if other_idx is not None and other_idx > idx:
-                        game.player.equipped_armor[other_slot] = other_idx - 1
-                game.player.components += reward
-                add_log(game, f"{slot} разобрана на {reward} компонентов.")
-                salvaged = True
-                break
-        if not salvaged:
-            add_log(game, "Сначала экипируй часть брони для разборки.")
-
     elif data == "craft_weapon" and game.player:
         gear = craft_item(game.player, "weapon", max(1, game.player.level))
         if gear:
             game.player.weapon_inventory.append(gear)
-            add_log(game, f"Скрафчено оружие: {gear.name}.")
+            add_log(game, f"Скрафчено оружие: {gear.name}. Стоимость: {game.player.level * 10} компонентов.")
         else:
-            add_log(game, "Не хватает компонентов или дизен для крафта оружия.")
+            add_log(game, f"Не хватает компонентов. Нужно: {game.player.level * 10}.")
 
     elif data == "craft_armor" and game.player:
         slot = random_choice(ARMOR_SLOTS)
         gear = craft_item(game.player, slot, max(1, game.player.level))
         if gear:
             game.player.armor_inventory.append(gear)
-            add_log(game, f"Скрафчена броня: {gear.name}.")
+            add_log(game, f"Скрафчена броня: {gear.name}. Стоимость: {game.player.level * 10} компонентов.")
         else:
-            add_log(game, "Не хватает компонентов или дизен для крафта брони.")
+            add_log(game, f"Не хватает компонентов. Нужно: {game.player.level * 10}.")
 
     elif data == "weapon_page_prev" and game.player:
         game.equipment_page_weapon = max(0, game.equipment_page_weapon - 1)
