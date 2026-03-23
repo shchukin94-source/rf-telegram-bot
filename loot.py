@@ -44,17 +44,15 @@ def maybe_gear_drop(enemy_level: int, is_boss: bool, elite: bool = False) -> Opt
 
 
 def salvage_reward(gear: Gear) -> int:
-    return max(2, gear.level + gear.base_stat + gear.upgrade * 2)
+    return max(1, gear.level)
 
 
 def craft_item(player, slot: str, level: int) -> Optional[Gear]:
-    recipe = CRAFT_RECIPES["weapon" if slot == "weapon" else "armor"]
-    if player.components < recipe["components"] or player.dizens < recipe["dizens"]:
+    cost = level * 10
+    if player.components < cost:
         return None
-    player.components -= recipe["components"]
-    player.dizens -= recipe["dizens"]
+    player.components -= cost
     return make_gear(slot, level, False)
-
 
 def try_upgrade(current_upgrade: int) -> tuple[bool, int]:
     rule = UPGRADE_CHANCES[current_upgrade]
