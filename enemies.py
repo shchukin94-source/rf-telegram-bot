@@ -42,7 +42,7 @@ def generate_enemy(zone_id: str, monster_entry: dict) -> dict:
             "max_hp": hp,
             "attack": atk,
             "exp": mob_exp(level) * 5,
-            "drops": list(zone["drops"] if zone else []),
+            "drops": list(boss.get("drops", [])),
             "is_boss": True,
             "elite": False,
             "legendary": False,
@@ -72,6 +72,10 @@ def generate_enemy(zone_id: str, monster_entry: dict) -> dict:
         reward_min *= 4
         reward_max *= 4
 
+    zone_loot = []
+    if zone:
+        zone_loot = zone.get("loot", [])
+
     return {
         "name": f"👑 Легендарный {monster_entry['name']}" if legendary else monster_entry["name"],
         "level": level + 3 if legendary else level,
@@ -79,7 +83,7 @@ def generate_enemy(zone_id: str, monster_entry: dict) -> dict:
         "max_hp": hp,
         "attack": atk,
         "exp": exp,
-        "drops": list(zone.get("loot", []) if zone else []),
+        "drops": list(zone_loot),
         "is_boss": False,
         "elite": elite,
         "legendary": legendary,
