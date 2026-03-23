@@ -304,32 +304,48 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         game.player.clears += 1
                         add_log(game, f"Победа. +{dizens_gain} дизен, +{exp_gain} exp, дроп: {loot}.")
 
-                        if loot == "талик невежества":
-                            game.player.talics_ignorance += 1
-                        elif loot == "талик покровительства":
-                            game.player.talics_protection += 1
-                        elif loot == "талик грации":
-                            game.player.talics_grace += 1
-                        elif loot == "Компонент":
-                            game.player.components += 1
-                            add_log(game, "Получен Компонент.")
-                        elif loot == "Редкая Руда":
-                            game.player.rare_ore += 1
-                            add_log(game, "Получена Редкая Руда.")
-                        elif loot == "банка HP":
-                            if game.player.banks < MAX_BANKS:
-                                game.player.banks += 1
-                                add_log(game, "Получена Банка.")
-                            else:
-                                add_log(game, f"Банка выпала, но инвентарь полон ({MAX_BANKS}).")
-                        else:
-                            extra_rolls = 10 if game.enemy.get("elite") else 1
+            if loot == "талик невежества":
+                game.player.talics_ignorance += 1
+                add_log(game, "Получен талик невежества.")
+            elif loot == "талик покровительства":
+                game.player.talics_protection += 1
+                add_log(game, "Получен талик покровительства.")
+            elif loot == "талик грации":
+                game.player.talics_grace += 1
+                add_log(game, "Получен талик грации.")
+            elif loot == "Компонент":
+                game.player.components += 1
+                add_log(game, "Получен Компонент.")
+            elif loot == "Редкая Руда":
+                game.player.rare_ore += 1
+                add_log(game, "Получена Редкая Руда.")
+            elif loot == "банка HP":
+                if game.player.banks < MAX_BANKS:
+                    game.player.banks += 1
+                    add_log(game, "Получена Банка.")
+                else:
+                    add_log(game, f"Банка выпала, но инвентарь полон ({MAX_BANKS}).")
 
-                            for _ in range(extra_rolls):
-                                if random_roll_percent(3):
-                                    game.player.talics_ignorance += 1
-                                    add_log(game, "Доп. дроп: талик невежества.")
-                                    break
+            # Доп. дроп таликов теперь работает ВСЕГДА, независимо от основного дропа
+            extra_rolls = 10 if game.enemy.get("elite") else 1
+
+            for _ in range(extra_rolls):
+                if random_roll_percent(3):
+                    game.player.talics_ignorance += 1
+                    add_log(game, "Доп. дроп: талик невежества.")
+                    break
+
+            for _ in range(extra_rolls):
+                if random_roll_percent(3):
+                    game.player.talics_protection += 1
+                    add_log(game, "Доп. дроп: талик покровительства.")
+                    break
+
+            for _ in range(extra_rolls):
+                if random_roll_percent(2):
+                    game.player.talics_grace += 1
+                    add_log(game, "Доп. дроп: талик грации.")
+                    break
 
                             for _ in range(extra_rolls):
                                 if random_roll_percent(3):
