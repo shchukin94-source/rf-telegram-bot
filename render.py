@@ -20,6 +20,8 @@ def render_text(game) -> str:
 
     if not game.player:
         lines.append("Выбери расу и класс, затем начни кампанию.")
+    if game.stage == "leaderboard" and hasattr(game, "leaderboard_text"):
+        lines.append(f"<b>Leaderboard:</b>\n{esc(game.leaderboard_text)}")
         lines.append("<b>Журнал:</b>\n" + esc("\n".join(game.log[-8:])))
         return "\n\n".join(lines)
 
@@ -144,6 +146,7 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
             ]
         )
         rows.append([InlineKeyboardButton("Рынок", callback_data="market")])
+        rows.append([InlineKeyboardButton("Leaderboard", callback_data="leaderboard")])
         rows.append(
             [
                 InlineKeyboardButton("Крафт оружия", callback_data="craft_weapon"),
@@ -241,7 +244,11 @@ def render_keyboard(game) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Продажа ▶️", callback_data="market_weapon_next"),
             ]
         )
+
+    if game.stage == "leaderboard":
+        rows.append([InlineKeyboardButton("Обновить", callback_data="leaderboard")])
         rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
+        return InlineKeyboardMarkup(rows)        rows.append([InlineKeyboardButton("На базу", callback_data="back_hub")])
         return InlineKeyboardMarkup(rows)
 
     if game.stage == "salvage":
