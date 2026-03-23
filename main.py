@@ -1,5 +1,7 @@
 import logging
 import os
+import random
+import time
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -9,15 +11,30 @@ from config import (
     ARMOR_SLOTS,
     DODGE_UPGRADES,
     ITEMS_PER_PAGE,
-    MAX_LEVEL,
     UPGRADE_CHANCES,
+    DEATH_COOLDOWN_SECONDS,
 )
-from data import CLASSES, RACES
+from data import CLASSES, MARKET_PRICES, RACES, SUPER_DROP_CHANCES
 from enemies import generate_enemy, get_zone, selected_monsters_for_zone
-from loot import craft_item, maybe_gear_drop, salvage_reward
+from loot import (
+    craft_item,
+    make_gear,
+    maybe_gear_drop,
+    open_ancient_container,
+    salvage_reward,
+    sell_weapon_from_inventory,
+)
 from models import GameState, Gear, Player
 from render import render_keyboard, render_text
-from stats import current_armor_piece, current_dodge, current_weapon, exp_needed_for_next, level_up, total_armor, total_attack
+from stats import (
+    current_armor_piece,
+    current_dodge,
+    current_weapon,
+    exp_needed_for_next,
+    level_up,
+    total_armor,
+    total_attack,
+)
 from storage import load_games, save_games
 from utils import add_log, cooldown_left
 
@@ -27,8 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
-
+TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
 USER_GAMES = load_games()
 
 
@@ -83,6 +99,22 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "После выбора локации можно выбрать конкретного монстра и фармить его без повторного выбора после победы."
     )
     await update.effective_message.reply_text(text)
+
+
+def random_roll_percent(chance: int) -> bool:
+    return random.randint(1, 100) <= chance
+
+
+def random_int(a: int, b: int) -> int:
+    return random.randint(a, b)
+
+
+def random_choice(items):
+    return random.choice(items)
+
+
+def time_now() -> int:
+    return int(time.time())
 
 
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -223,6 +255,20 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     game.player.armor_inventory.append(gear)
                     add_log(game, f"Выпала броня: {gear.name} +0.")
 
+            super_mult = 10 if game.enemy.get("elite") else (5 if game.enemy["is_boss"] else 1)
+
+            if random.randint(1, 1000) <= SUPER_DROP_CHANCES["ancient_container"] * super_mult:
+                game.player.ancient_containers += 1
+                add_log(game, "🔥 Супер-дроп: Древний контейнер.")
+
+            if random.randint(1, 1000) <= SUPER_DROP_CHANCES["enhancement_core"] * super_mult:
+                game.player.enhancement_cores += 1
+                add_log(game, "✨ Супер-дроп: Ядро усиления.")
+
+            if random.randint(1, 1000) <= SUPER_DROP_CHANCES["absolute_talic"] * super_mult:
+                game.player.absolute_talics += 1
+                add_log(game, "💎 Супер-дроп: Талик Абсолюта.")
+
             level_up(game.player, game, add_log)
 
             if game.selected_monster_index is not None and game.current_zone_id:
@@ -242,7 +288,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 add_log(game, f"{game.enemy['name']} наносит {enemy_dmg} урона.")
                 if game.player.hp <= 0:
                     game.player.hp = 0
-                    game.dead_until_ts = int(time_now()) + DEATH_COOLDOWN_SECONDS
+                    game.dead_until_ts = time_now() + DEATH_COOLDOWN_SECONDS
                     game.stage = "hub"
                     game.enemy = None
                     add_log(game, "Ты погиб. Все сохранено. Откат 60 секунд.")
@@ -261,8 +307,104 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         game.player.banks += 1
         add_log(game, "На базе ты восстановил здоровье и получил 1 банку.")
 
+    elif data == "buy_bank" and game.player:
+        price = MARKET_PRICES["buy_bank"]
+        if game.player.dizens >= price:
+            game.player.dizens -= price
+            game.player.banks += 1
+            add_log(game, "Куплена 1 банка.")
+        else:
+            add_log(game, "Не хватает дизен.")
+
+    elif data == "buy_components_pack" and game.player:
+        price = MARKET_PRICES["buy_components_pack"]
+        if game.player.dizens >= price:
+            game.player.dizens -= price
+            game.player.components += 5
+            add_log(game, "Куплено 5 компонентов.")
+        else:
+            add_log(game, "Не хватает дизен.")
+
+    elif data == "buy_random_weapon" and game.player:
+        price = MARKET_PRICES["buy_random_weapon"]
+        if game.player.dizens >= price:
+            game.player.dizens -= price
+            gear = make_gear("weapon", max(1, game.player.level), False)
+            game.player.weapon_inventory.append(gear)
+            add_log(game, f"Куплено случайное оружие: {gear.name}.")
+        else:
+            add_log(game, "Не хватает дизен.")
+
+    elif data == "sell_bank" and game.player:
+        if game.player.banks > 0:
+            game.player.banks -= 1
+            game.player.dizens += MARKET_PRICES["sell_bank"]
+            add_log(game, "Продана 1 банка.")
+        else:
+            add_log(game, "У тебя нет лишней банки.")
+
+    elif data == "sell_components_pack" and game.player:
+        if game.player.components >= 5:
+            game.player.components -= 5
+            game.player.dizens += MARKET_PRICES["sell_components_pack"]
+            add_log(game, "Продано 5 компонентов.")
+        else:
+            add_log(game, "Не хватает компонентов.")
+
+    elif data.startswith("sell_weapon:") and game.player:
+        idx = int(data.split(":", 1)[1])
+        if 0 <= idx < len(game.player.weapon_inventory):
+            gear_name = game.player.weapon_inventory[idx].name
+            price = sell_weapon_from_inventory(game.player, idx)
+            add_log(game, f"Продано оружие {gear_name} за {price} дизен.")
+
+    elif data == "market_weapon_prev" and game.player:
+        game.market_weapon_page = max(0, game.market_weapon_page - 1)
+
+    elif data == "market_weapon_next" and game.player:
+        max_page = max(0, (len(game.player.weapon_inventory) - 1) // ITEMS_PER_PAGE)
+        game.market_weapon_page = min(max_page, game.market_weapon_page + 1)
+
+    elif data == "open_container" and game.player:
+        if game.player.ancient_containers <= 0:
+            add_log(game, "У тебя нет древнего контейнера.")
+        else:
+            game.player.ancient_containers -= 1
+            gear, text = open_ancient_container(game.player)
+            if gear.slot == "weapon":
+                game.player.weapon_inventory.append(gear)
+            else:
+                game.player.armor_inventory.append(gear)
+            add_log(game, text, f"Получен предмет: {gear.name} +0.")
+
+    elif data == "use_enhancement_core" and game.player:
+        if game.player.enhancement_cores <= 0:
+            add_log(game, "У тебя нет ядра усиления.")
+        elif game.player.weapon_upgrade_buff_active:
+            add_log(game, "Бафф ядра уже активен.")
+        else:
+            game.player.enhancement_cores -= 1
+            game.player.weapon_upgrade_buff_active = True
+            add_log(game, "Ядро активировано. Следующая заточка оружия получит двойной шанс.")
+
+    elif data == "use_absolute_talic" and game.player:
+        gear = current_weapon(game.player)
+        if gear is None:
+            add_log(game, "Сначала экипируй оружие.")
+        elif game.player.absolute_talics <= 0:
+            add_log(game, "У тебя нет Талика Абсолюта.")
+        elif gear.upgrade >= 7:
+            add_log(game, "Оружие уже +7.")
+        else:
+            game.player.absolute_talics -= 1
+            gear.upgrade += 1
+            add_log(game, f"Абсолютная заточка успешна. {gear.name} теперь +{gear.upgrade}.")
+
     elif data == "equipment" and game.player:
         game.stage = "equipment"
+
+    elif data == "market" and game.player:
+        game.stage = "market"
 
     elif data.startswith("equip_weapon:") and game.player:
         idx = int(data.split(":", 1)[1])
@@ -288,8 +430,15 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             add_log(game, "Оружие уже +7.")
         else:
             rule = UPGRADE_CHANCES[gear.upgrade]
+            chance = rule["chance"]
+
+            if game.player.weapon_upgrade_buff_active:
+                chance = min(100, chance * 2)
+                game.player.weapon_upgrade_buff_active = False
+                add_log(game, f"Ядро усиления сработало. Шанс заточки: {chance}%.")
+
             game.player.talics_ignorance -= 1
-            if random_roll_percent(rule["chance"]):
+            if random_roll_percent(chance):
                 gear.upgrade = rule["next"]
                 add_log(game, f"Успех. {gear.name} теперь +{gear.upgrade}.")
             else:
@@ -409,26 +558,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     save_games(USER_GAMES)
     await send_or_edit(update, render_text(game))
-
-
-def random_roll_percent(chance: int) -> bool:
-    import random
-    return random.randint(1, 100) <= chance
-
-
-def random_int(a: int, b: int) -> int:
-    import random
-    return random.randint(a, b)
-
-
-def random_choice(items):
-    import random
-    return random.choice(items)
-
-
-def time_now() -> int:
-    import time
-    return int(time.time())
 
 
 def _run_self_checks() -> None:
