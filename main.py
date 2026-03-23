@@ -44,7 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
+TOKEN = os.getenv("BOT_TOKEN", "8728647250:AAHX_qXXsCPLbMaCrrtO_80BSa2HlG-KIC8")
 USER_GAMES = load_games()
 
 
